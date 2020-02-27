@@ -45,7 +45,7 @@
 
 LIBRARY vrepLib; // the V-REP library that we will dynamically load and bind
 
-simInt hRobot, hCar; // robot handle
+simInt hRobot, hAckerCar, hCar, hsteeringLeft, hsteeringRight, hmotorLeft, hmotorRight; // robot handle
 simInt hDummy1,hDummy2,hDummy3,hDummy4,hDummyMid1,hDummyMid2,hDummyCentre1,hDummyCentre2;
 
 simFloat pDummyCentre1[3], pDummyCentre2[3];
@@ -78,16 +78,20 @@ void Initialize(){
   hDummyCentre1 = simGetObjectHandle("DummyCentre1");
   hDummyCentre2 = simGetObjectHandle("DummyCentre2");
 
-// Car Robot Handle
+// Ackeramann Car Robot Handle
 
-  hCar = simGetObjectHandle("Car")
+  hAckerCar = simGetObjectHandle("AckermannCar");
+  hsteeringLeft=simGetObjectHandle("nakedCar_steeringLeft");
+  hsteeringRight=simGetObjectHandle("nakedCar_steeringRight");
+  hmotorLeft=simGetObjectHandle("nakedCar_motorLeft");
+  hmotorRight=simGetObjectHandle("nakedCar_motorRight");
 
 
 	simFloat pRobot[3];
 	simGetObjectPosition(hRobot, -1, pRobot);
 
-  simFloat pCar[3];
-  simGetObjectPosition(hCar, -1, pCar);
+  simFloat pAckerCar[3];
+  simGetObjectPosition(hAckerCar, -1, pAckerCar);
 	// xIni = pRobot[0];
 	// yIni = pRobot[1];
 	// zIni = pRobot[2];
@@ -245,6 +249,15 @@ void Execution(){
   std::cout << "eRobot2 finale"<< eRobot[2] << std::endl;
 	simSetObjectPosition(hRobot, -1, pRobot);
 	simSetObjectOrientation(hRobot, -1, eRobot);
+
+  // Prova Ackermann Car
+  simSetJointTargetVelocity(hmotorLeft,3);
+  simSetJointTargetVelocity(hmotorRight,3);
+
+  simSetJointTargetPosition(hsteeringLeft,0.5);
+  simSetJointTargetPosition(hsteeringRight,0.5);
+
+
 }
 
 // This is the plugin start routine (called just once, just after the plugin was loaded):
