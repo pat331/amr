@@ -272,7 +272,8 @@ void Execution(){
   pr(0) = pAckerCar[0];
   pr(1) = pAckerCar[1];
 
-  omega = (norm_v_desired/v_limit) * sqrt(pow(pr(0)-pd(0),2)+pow(pr(1)-pd(1),2));
+  // omega = (norm_v_desired/v_limit) * sqrt(pow(pr(0)-pd(0),2)+pow(pr(1)-pd(1),2));
+  omega = 0;
   v = v_desired + Kp * (pd - pr);
   norm_v = sqrt(pow(v(0),2)+pow(v(1),2));
 
