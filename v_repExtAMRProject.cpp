@@ -62,6 +62,9 @@ float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajec
 
 // ray circonference
 float r;
+float l = 2.5772;
+float v_limit = 5.0;
+float phi = 0;
 
 
 void Initialize(){
@@ -169,17 +172,28 @@ void Execution(){
 	// u = (v, omega)
 	Eigen::Vector2f u; // control inputs
 
+  Eigen::Vector2f v, v_desired, pd, pr;
+  Eigen::Matrix2f Kp;
+  Kp(0,0)=0.05;
+  Kp(0,1)=0.0;
+  Kp(1,0)=0.0;
+  Kp(1,1)=0.05;
+
 	simFloat pRobot[3];
+  simFloat pAckerCar[3];
 	simFloat eRobot[3];
+  simFloat eAckerCar[3];
+
+  float norm_v, omega, norm_v_desired;
 
 	// get the current configuration
-	simGetObjectPosition(hRobot, -1, pRobot);
-	simGetObjectOrientation(hRobot, -1, eRobot);
-	q_k << pRobot[0], pRobot[1], eRobot[2], 0.0; // now we neglect phi (putting it to 0) since we have only a box
-  // q_k << pRobot[0], pRobot[1], eRobot[2], 0.0;
-  std::cout << "eRobot2 iniziale"<< eRobot[2] << std::endl;
-	// compute the control inputs (via the controller)
-	//u = ...;
+	// simGetObjectPosition(hRobot, -1, pRobot);
+	// simGetObjectOrientation(hRobot, -1, eRobot);
+  simGetObjectPosition(hAckerCar, -1, pAckerCar);
+	simGetObjectOrientation(hAckerCar, -1, eAckerCar);
+  std::cout << "euler inizio"<< eAckerCar[0] <<"\n" <<eAckerCar[1]<<"\n"<< eAckerCar[2]<<"\n" <<std::endl;
+	q_k << pAckerCar[0], pAckerCar[1], eAckerCar[2], phi; // now we neglect phi (putting it to 0) since we have only a box
+
 
 	// integrate the system (to find the next configuration), e.g., via Euler integration
 	//q_kp1(0) = ...;
@@ -197,6 +211,9 @@ void Execution(){
 
     x = t1 * xFin2 + (1 - t1) * xIni1;
 		y = t1 * yFin2 + (1 - t1) * yIni1;
+
+    v_desired(0) = xFin2 - xIni1;
+    v_desired(1) = yFin2 - yIni1;
 	}
   else if(t_sim > trajDur1 && t_sim < trajDur1 + trajDur2){
 
@@ -207,6 +224,9 @@ void Execution(){
     x = pDummyCentre1[0] - r*cos(theta);
     y = pDummyCentre1[1] - r*sin(theta);
 
+    v_desired(0) = PI*r*sin(PI*t2);
+    v_desired(1) = -PI*r*cos(PI*t2);
+
   }
   else if(t_sim > trajDur1 +trajDur2 && t_sim < trajDur1 + trajDur2 + trajDur3){
 
@@ -214,6 +234,9 @@ void Execution(){
 
     x = t3 * xFin4 + (1 - t3) * xIni3;
 		y = t3 * yFin4 + (1 - t3) * yIni3;
+
+    v_desired(0) = xFin4 - xIni3;
+    v_desired(1) = yFin4 - yIni3;
 
 
   }
@@ -225,37 +248,71 @@ void Execution(){
     x = pDummyCentre2[0] + r*cos(theta);
     y = pDummyCentre2[1] + r*sin(theta);
 
+    v_desired(0) = -PI*r*sin(PI*t4);
+    v_desired(1) = PI*r*cos(PI*t4);
+
   }
   else{
 
     x = xFin5;
     y = yFin5;
 
+    v_desired(0) = 0;
+    v_desired(1) = 0;
+
   }
 
-	q_kp1(0) = x;
-	q_kp1(1) = y;
-	q_kp1(2) = q_k(2);
-	q_kp1(3) = q_k(3);
+  // compute the control inputs (via the controller)
+	//u = ...;
+  // v_desired(0) = 3.0;
+  // v_desired(1) = 3.0;
+  norm_v_desired = sqrt(pow(v_desired(0),2)+pow(v_desired(1),2));
+  pd(0) = x;
+  pd(1) = y;
+  pr(0) = pAckerCar[0];
+  pr(1) = pAckerCar[1];
+
+  omega = (norm_v_desired/v_limit) * sqrt(pow(pr(0)-pd(0),2)+pow(pr(1)-pd(1),2));
+  v = v_desired + Kp * (pd - pr);
+  norm_v = sqrt(pow(v(0),2)+pow(v(1),2));
+
+  // std::cout << "velocity"<< v << std::endl;
+  // std::cout << "norm"<< norm_v << std::endl;
+
+	q_kp1(0) = q_k(0) + norm_v*cos(q_k(2))*cos(q_k(3))*dt;
+	q_kp1(1) = q_k(1) + norm_v*sin(q_k(2))*cos(q_k(3))*dt;
+	q_kp1(2) = q_k(2) + norm_v*sin(q_k(3))*(1/l)*dt;
+	q_kp1(3) = q_k(3) + omega*dt;
 
 	// set the robot in the new configuration
-  pRobot[0] = q_kp1(0);
-	pRobot[1] = q_kp1(1);
-	pRobot[2] = zIni1;
-	eRobot[0] = 0.0;
-	eRobot[1] = 0.0;
-	eRobot[2] = q_kp1(2);
+  pAckerCar[0] = q_kp1(0);
+	pAckerCar[1] = q_kp1(1);
+	pAckerCar[2] = zIni1;
+	// eAckerCar[0] = PI/2;
+	// eAckerCar[1] = 0.0;
+	eAckerCar[2] = q_kp1(2);
+  phi = q_kp1(3);
+  //phi=0.0;
 
-  std::cout << "eRobot2 finale"<< eRobot[2] << std::endl;
-	simSetObjectPosition(hRobot, -1, pRobot);
-	simSetObjectOrientation(hRobot, -1, eRobot);
+  // std::cout << "sampling time"<< dt <<"\n" << std::endl;
+  // std::cout << "x"<< q_kp1(0) << "\n" << std::endl;
+  // std::cout << "y"<< q_kp1(1) << "\n" <<std::endl;
+  // std::cout << "theta"<< q_kp1(2) << "\n" <<std::endl;
+  // std::cout << "phi"<< q_kp1(3) << "\n" <<std::endl;
+  // std::cout << "omega"<< omega << "\n" <<std::endl;
+  std::cout << "euler fine"<< eAckerCar[0] <<"\n" <<eAckerCar[1]<<"\n"<< eAckerCar[2]<<"\n" <<std::endl;
+
+
+
+	simSetObjectPosition(hAckerCar, -1, pAckerCar);
+	simSetObjectOrientation(hAckerCar, -1, eAckerCar);
 
   // Prova Ackermann Car
-  simSetJointTargetVelocity(hmotorLeft,3);
-  simSetJointTargetVelocity(hmotorRight,3);
+  // simSetJointTargetVelocity(hmotorLeft,norm_v);
+  // simSetJointTargetVelocity(hmotorRight,norm_v);
 
-  simSetJointTargetPosition(hsteeringLeft,0.5);
-  simSetJointTargetPosition(hsteeringRight,0.5);
+  simSetJointTargetPosition(hsteeringLeft,phi);
+  simSetJointTargetPosition(hsteeringRight,phi);
 
 
 }
