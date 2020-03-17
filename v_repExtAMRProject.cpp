@@ -64,7 +64,7 @@ float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajec
 float r;
 float l = 2.5772/2;
 float v_limit = 5.0;
-float phi = 0.0;
+float phi = PI/2;
 
 
 void Initialize(){
@@ -83,7 +83,8 @@ void Initialize(){
 
 // Ackeramann Car Robot Handle
 
-  hAckerCar = simGetObjectHandle("AckermannCar");
+  // hAckerCar = simGetObjectHandle("AckermannCar");
+  hAckerCar = simGetObjectHandle("Car");
   hsteeringLeft=simGetObjectHandle("nakedCar_steeringLeft");
   hsteeringRight=simGetObjectHandle("nakedCar_steeringRight");
   hmotorLeft=simGetObjectHandle("nakedCar_motorLeft");
@@ -196,20 +197,26 @@ void Execution(){
 
   //KINEMATIC MODEL
 
-  q_k << pAckerCar[0], pAckerCar[1], eAckerCar[1], phi;
-  eAckerCar[0]=-PI/2;
-  eAckerCar[2]=-PI/2;
-  float theta = eAckerCar[1];
+  q_k << pAckerCar[0], pAckerCar[1], eAckerCar[2], phi;
+  // eAckerCar[0]=-PI/2;
+  // eAckerCar[2]=-PI/2;
+  float theta = eAckerCar[2];
+  std::cout << "theta "<<theta <<"\n" <<std::endl;
 
   //Construct the trajectory
 	float t_sim = (float)simGetSimulationTime();
 
   // Coordinates of point P
-  float b = 0.002;
+  float b = 0.25;
   // float y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
   // float y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
   float y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
   float y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
+
+  std::cout << "p Car[0] "<<pAckerCar[0] <<"\n" <<std::endl;
+  std::cout << "p Car[1] "<<pAckerCar[1] <<"\n" <<std::endl;
+  std::cout << "y1 " << y1 <<"\n" <<std::endl;
+  std::cout << "y2 " << y2 <<"\n" <<std::endl;
 
 	float x, y;
 	if(t_sim > 0 && t_sim < trajDur1){
@@ -219,11 +226,14 @@ void Execution(){
     x = t1 * xFin2 + (1 - t1) * xIni1;
 		y = t1 * yFin2 + (1 - t1) * yIni1;
 
+    std::cout << "x traj " << x <<"\n" <<std::endl;
+    std::cout << "y traj " << y <<"\n" <<std::endl;
+
     float square_distance = sqrt(pow(xFin2 - xIni1,2)+pow(yFin2 - yIni1,2));
 
     v_desired(0) = (xFin2 - xIni1)/square_distance;
     v_desired(1) = (yFin2 - yIni1)/square_distance;
-    std::cout << "t sim < trajDur1" <<"\n" <<std::endl;
+    // std::cout << "t sim < trajDur1" <<"\n" <<std::endl;
 
 
 
@@ -283,9 +293,9 @@ void Execution(){
 
   // compute the control inputs (via the controller)
 
-  pd(0) = x;
+  pd(0) = x; // position desired
   pd(1) = y;
-  pr(0) = y1;
+  pr(0) = y1; // robot position
   pr(1) = y2;
   // pr(0) = pAckerCar[0];
   // pr(1) = pAckerCar[1];
@@ -299,30 +309,66 @@ void Execution(){
   // omega = (norm_v_desired/v_limit) * sqrt(pow(pr(0)-pd(0),2)+pow(pr(1)-pd(1),2));
   // omega = 0;
 
+  // FRONT WHEEL DRIVE
+
   //controllo per y
   // 0.5 is only one component of the Kp gain matrix
-  u1 = v_desired(0) + (0.5)*(pd(0) - pr(0));
-  u2 = v_desired(1) + (0.5)*(pd(1) - pr(1));
+  // u1 = v_desired(0) + (0.5)*(pd(0) - pr(0));
+  // u2 = v_desired(1) + (0.5)*(pd(1) - pr(1));
+  //
+  // // Update of the control point B
+  // // [vControlT wControlT]' = Tinv*[u1 u2]'
+  //
+  // float vControlT = u1*cos(phi + theta) + u2*sin(phi + theta);
+  // float wControlT = -(b*u2*cos(theta) - b*u1*sin(theta) - b*u2*cos(2*phi + theta) + b*u1*sin(2*phi + theta) - 2*l*u2*cos(phi + theta) + 2*l*u1*sin(phi + theta))/(2*b*l);
+  //
+  // y1 = y1 + u1*dt;
+  // y2 = y2 + u2*dt;
+  //
+  // q_kp1(2) = q_k(2) + vControlT*sin(phi)*(1/l)*dt;
+	// q_kp1(3) = q_k(3) + wControlT*dt;
+  // // q_kp1(2) = q_k(2);
+  // // q_kp1(3) = q_k(3);
+  //
+  // // y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
+  // // y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
+  //
+  // q_kp1(0) = y1 - l*cos(q_kp1(2)) - b*cos(q_kp1(2)+q_kp1(3));
+  // q_kp1(1) = y2 - l*sin(q_kp1(2)) - b*sin(q_kp1(2)+q_kp1(3));
+
+  // // // // // // // // // // // // //
+
+  // REAR WHEEL DRIVE (prova)
+
+  u1 = v_desired(0) + (.1)*(pd(0) - pr(0));
+  u2 = v_desired(1) + (.1)*(pd(1) - pr(1));
 
   // Update of the control point B
   // [vControlT wControlT]' = Tinv*[u1 u2]'
 
-  float vControlT = u1*cos(phi + theta) + u2*sin(phi + theta);
-  float wControlT = -(b*u2*cos(theta) - b*u1*sin(theta) - b*u2*cos(2*phi + theta) + b*u1*sin(2*phi + theta) - 2*l*u2*cos(phi + theta) + 2*l*u1*sin(phi + theta))/(2*b*l);
+  float theta_dot = u1*cos(phi + theta)*sin(phi) + u2*sin(phi + theta)*(1/l);
+  float phi_dot = -(cos(theta+phi)*sin(phi)*(1/l)+sin(theta+phi)*(1/b))*u1-(sin(theta+phi)*sin(phi)*(1/l)-cos(theta+phi)*(1/b))*u2;
 
-  y1 = y1 + u1*dt;
-  y2 = y2 + u2*dt;
+  // Euler Integration
+  y1 = y1 + u1*dt; // u1 = y1dot
+  y2 = y2 + u2*dt; // u2 = y2dot
 
-  q_kp1(2) = q_k(2) + vControlT*sin(phi)*(1/l)*dt;
-	q_kp1(3) = q_k(3) + wControlT*dt;
+  // theta_new = theta + theta_dot*dt
+  q_kp1(2) = q_k(2) + theta_dot *dt;
+  q_kp1(3) = q_k(3) + phi_dot *dt;
   // q_kp1(2) = q_k(2);
   // q_kp1(3) = q_k(3);
 
   // y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
   // y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
 
+  // Formula Inversa per trovare la posizione della macchina
   q_kp1(0) = y1 - l*cos(q_kp1(2)) - b*cos(q_kp1(2)+q_kp1(3));
   q_kp1(1) = y2 - l*sin(q_kp1(2)) - b*sin(q_kp1(2)+q_kp1(3));
+
+  // // // // // // // // // // // // //
+
+
 
 
 
@@ -357,7 +403,7 @@ void Execution(){
   pAckerCar[0] = q_kp1(0);
 	pAckerCar[1] = q_kp1(1);
 	pAckerCar[2] = zIni1;
-	eAckerCar[1] = q_kp1(2);
+	eAckerCar[2] = q_kp1(2);
   phi = q_kp1(3);
   //phi=0.0;
 
