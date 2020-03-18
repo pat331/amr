@@ -52,7 +52,7 @@ simFloat pDummyCentre1[3], pDummyCentre2[3];
 
 float xIni1, xIni2, xIni3, xIni4;
 float yIni1, yIni2, yIni3, yIni4;
-float zIni1, zIni2; // z-component of the robot position (it will be constant during the simulation)
+float zIni1, zIni2, zCar; // z-component of the robot position (it will be constant during the simulation)
 float xFin2, xFin3, xFin4, xFin5;
 float yFin2, yFin3, yFin4, yFin5;
 
@@ -109,13 +109,15 @@ void Initialize(){
   simGetObjectPosition(hDummyCentre2,-1,pDummyCentre2);
 
   // ray circonference
-  r = sqrtf(pow(pDummy2[0] - pDummy3[0],2) + pow(pDummy2[1] - pDummy3[1],2)) * 1/2;
+  r = sqrtf(pow(pDummy2[0] - pDummyCentre1[0],2) + pow(pDummy2[1] - pDummyCentre1[1],2));
+  // r = 5.098;
 
   // First segment of the trail
   //Init point
   xIni1 = pDummy1[0];
   yIni1 = pDummy1[1];
   zIni1 = pDummy1[2];
+  zCar  = zIni1 + 0.2;
 
   //End point
   xFin2 = pDummy2[0];
@@ -201,17 +203,21 @@ void Execution(){
   // eAckerCar[0]=-PI/2;
   // eAckerCar[2]=-PI/2;
   float theta = eAckerCar[2];
+  float theta_car = theta + PI/2;
   std::cout << "theta "<<theta <<"\n" <<std::endl;
 
   //Construct the trajectory
 	float t_sim = (float)simGetSimulationTime();
 
   // Coordinates of point P
-  float b = 0.25;
+  float b = 0.025;
+
+
+  // Normal choise of y1 y2
   // float y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
   // float y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
-  float y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
-  float y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
+  float y1 = pAckerCar[0] + l*cos(theta_car) + b*cos(theta_car+phi);
+  float y2 = pAckerCar[1] + l*sin(theta_car) + b*sin(theta_car+phi);
 
   std::cout << "p Car[0] "<<pAckerCar[0] <<"\n" <<std::endl;
   std::cout << "p Car[1] "<<pAckerCar[1] <<"\n" <<std::endl;
@@ -238,19 +244,34 @@ void Execution(){
 
 
 	}
-  // else if(t_sim > trajDur1 && t_sim < trajDur1 + trajDur2){
-  //
-  //   // traiettoria circolare
-  //   float t2 = (t_sim-trajDur1) / trajDur2;
-  //   float theta = PI*t2;
-  //
-  //   x = pDummyCentre1[0] - r*cos(theta);
-  //   y = pDummyCentre1[1] - r*sin(theta);
-  //
-  //   v_desired(0) = PI*r*sin(PI*t2);
-  //   v_desired(1) = -PI*r*cos(PI*t2);
-  //
-  // }
+  else if(t_sim > trajDur1 && t_sim < trajDur1 + trajDur2){
+  // else {
+
+    // traiettoria circolare
+    float t2 = (t_sim-trajDur1) / trajDur2;
+    std::cout << "t2 " << t2 <<"\n" <<std::endl;
+
+    float omega = PI*t2;
+
+    x = pDummyCentre1[0] - r*cos(omega);
+    y = pDummyCentre1[1] - r*sin(omega);
+
+    float x_prova = pDummyCentre1[0] - r;
+    float y_prova = pDummyCentre1[1] - r;
+
+    std::cout << "PUNTO CIRCOFERENZA x " << x <<"\n" <<std::endl;
+    std::cout << "PUNTO CIRCOFERENZA y " << y <<"\n" <<std::endl;
+
+    std::cout << "PROVA x " << x_prova <<"\n" <<std::endl;
+    std::cout << "PROVA y " << y_prova <<"\n" <<std::endl;
+
+    float r_prova = sqrtf(pow(x - pDummyCentre1[0],2) + pow(y - pDummyCentre1[1],2));
+    std::cout << "ROGGIO" << r_prova <<"\n" <<std::endl;
+
+    v_desired(0) = PI*r*sin(omega)/trajDur2;
+    v_desired(1) = -PI*r*cos(omega)/trajDur2;
+
+  }
   // else if(t_sim > trajDur1 +trajDur2 && t_sim < trajDur1 + trajDur2 + trajDur3){
   //
   //   float t3 = (t_sim-(trajDur1 + trajDur2)) / trajDur3;
@@ -277,8 +298,8 @@ void Execution(){
   // }
   else{
 
-    x = xFin2;
-    y = yFin2;
+    x = xFin3;
+    y = yFin3;
 
     // x = xFin5;
     // y = yFin5;
@@ -346,16 +367,22 @@ void Execution(){
   // Update of the control point B
   // [vControlT wControlT]' = Tinv*[u1 u2]'
 
-  float theta_dot = u1*cos(phi + theta)*sin(phi) + u2*sin(phi + theta)*(1/l);
-  float phi_dot = -(cos(theta+phi)*sin(phi)*(1/l)+sin(theta+phi)*(1/b))*u1-(sin(theta+phi)*sin(phi)*(1/l)-cos(theta+phi)*(1/b))*u2;
+  // float theta_dot = (u1*cos(phi + theta)*sin(phi) + u2*sin(phi)*sin(phi + theta))*(1/l);
+  // float phi_dot = -(cos(theta+phi)*sin(phi)*(1/l)+sin(theta+phi)*(1/b))*u1-(sin(theta+phi)*sin(phi)*(1/l)-cos(theta+phi)*(1/b))*u2;
+
+  float theta_dot = (u1*cos(phi + theta_car)*sin(phi) + u2*sin(phi)*sin(phi + theta_car))*(1/l);
+  float phi_dot = -(cos(theta_car+phi)*sin(phi)*(1/l)+sin(theta_car+phi)*(1/b))*u1-(sin(theta_car+phi)*sin(phi)*(1/l)-cos(theta_car+phi)*(1/b))*u2;
 
   // Euler Integration
   y1 = y1 + u1*dt; // u1 = y1dot
   y2 = y2 + u2*dt; // u2 = y2dot
 
   // theta_new = theta + theta_dot*dt
-  q_kp1(2) = q_k(2) + theta_dot *dt;
-  q_kp1(3) = q_k(3) + phi_dot *dt;
+  q_kp1(2) = theta + theta_dot *dt;
+  q_kp1(3) = phi + phi_dot *dt;
+
+  theta_car = theta_car + theta_dot *dt;
+  phi = phi + phi_dot *dt;
   // q_kp1(2) = q_k(2);
   // q_kp1(3) = q_k(3);
 
@@ -363,8 +390,14 @@ void Execution(){
   // y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
 
   // Formula Inversa per trovare la posizione della macchina
-  q_kp1(0) = y1 - l*cos(q_kp1(2)) - b*cos(q_kp1(2)+q_kp1(3));
-  q_kp1(1) = y2 - l*sin(q_kp1(2)) - b*sin(q_kp1(2)+q_kp1(3));
+
+
+  // Normal choise for y1 y2 (cos and sin)
+  // q_kp1(0) = y1 - l*cos(q_kp1(2)) - b*cos(q_kp1(2)+q_kp1(3));
+  // q_kp1(1) = y2 - l*sin(q_kp1(2)) - b*sin(q_kp1(2)+q_kp1(3));
+
+  q_kp1(0) = y1 - l*cos(theta_car) - b*cos(theta_car + phi);
+  q_kp1(1) = y2 - l*sin(theta_car) - b*sin(theta_car + phi);
 
   // // // // // // // // // // // // //
 
@@ -402,7 +435,7 @@ void Execution(){
 	// set the robot in the new configuration
   pAckerCar[0] = q_kp1(0);
 	pAckerCar[1] = q_kp1(1);
-	pAckerCar[2] = zIni1;
+	pAckerCar[2] = zCar;
 	eAckerCar[2] = q_kp1(2);
   phi = q_kp1(3);
   //phi=0.0;
