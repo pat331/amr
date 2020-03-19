@@ -27,6 +27,7 @@
 #include <thread>
 #include "Eigen/Core"
 #include "Eigen/Dense"
+#include <random>
 
 #ifdef _WIN32
 #include <shlwapi.h>
@@ -62,9 +63,12 @@ float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajec
 
 // ray circonference
 float r;
-float l = 2.5772/2;
+float l = 2.32/2;
+
 float v_limit = 5.0;
 float phi = PI/2;
+
+
 
 
 void Initialize(){
@@ -312,8 +316,33 @@ void Execution(){
 
 	// REAR WHEEL DRIVE (prova)
 
-	u1 = v_desired(0) + (.1)*(pd(0) - pr(0));
-	u2 = v_desired(1) + (.1)*(pd(1) - pr(1));
+	// Define random generator with Gaussian distribution
+	const double mean = 0.0;
+	const double stddev = 0.1;
+	// construct a trivial random generator engine from a time-based seed:
+	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+	std::default_random_engine generator (seed);
+	std::normal_distribution<double> distribution (mean,stddev);
+
+	float beta = abs(distribution(generator));
+
+	float vmax = 5;
+	float hdb_x = (v_desired(0)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+	float hdb_y = (v_desired(1)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+
+	float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
+
+	std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
+
+	std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
+	std::cout << " radice "<< radice <<"\n" <<std::endl;
+	std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
+
+	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
+	u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
+
+	// u1 = v_desired(0) + 0.1*(pd(0) - pr(0));
+	// u2 = v_desired(1) + 0.1*(pd(1) - pr(1));
 
 	// Update of the control point B
 	// [vControlT wControlT]' = Tinv*[u1 u2]'
