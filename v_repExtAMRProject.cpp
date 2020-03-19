@@ -48,8 +48,11 @@ LIBRARY vrepLib; // the V-REP library that we will dynamically load and bind
 
 simInt hRobot, hAckerCar, hsteeringLeft, hsteeringRight, hmotorLeft, hmotorRight; // robot handle
 simInt hDummy1,hDummy2,hDummy3,hDummy4,hDummyMid1,hDummyMid2,hDummyCentre1,hDummyCentre2;
+simInt hClosestPoint;
+simInt hCuboid1,hCuboid2,hCuboid3,hCuboid4;
 
 simFloat pDummyCentre1[3], pDummyCentre2[3];
+simFloat pCuboid1[3],pCuboid2[3],pCuboid3[3],pCuboid4[3];
 
 float xIni1, xIni2, xIni3, xIni4;
 float yIni1, yIni2, yIni3, yIni4;
@@ -58,24 +61,24 @@ float xFin2, xFin3, xFin4, xFin5;
 float yFin2, yFin3, yFin4, yFin5;
 
 
+
 float dt; // control timestep (can be modified directly in the V-REP scene)
 float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajectory
 
 // ray circonference
 float r;
 float l = 2.32/2;
-
 float v_limit = 5.0;
 float phi = PI/2;
 
-
+float dist_closest_point;
 
 
 void Initialize(){
 	std::cout << "Initializing..." << std::endl;
 
 	// Cuboid Handle
-	hRobot = simGetObjectHandle("Cuboid");
+	//hRobot = simGetObjectHandle("Cuboid");
 	hDummy1 = simGetObjectHandle("Dummy1");
 	hDummy2 = simGetObjectHandle("Dummy2");
 	hDummy3 = simGetObjectHandle("Dummy3");
@@ -84,6 +87,14 @@ void Initialize(){
 	hDummyMid2 = simGetObjectHandle("DummyMid2");
 	hDummyCentre1 = simGetObjectHandle("DummyCentre1");
 	hDummyCentre2 = simGetObjectHandle("DummyCentre2");
+	hClosestPoint = simGetObjectHandle("closestDetectedPoint");
+	hCuboid1 = simGetObjectHandle("Cuboid1");
+	hCuboid2 = simGetObjectHandle("Cuboid2");
+	hCuboid3 = simGetObjectHandle("Cuboid3");
+	hCuboid4 = simGetObjectHandle("Cuboid4");
+
+
+
 
 	// Ackeramann Car Robot Handle
 
@@ -95,12 +106,18 @@ void Initialize(){
 
 
 	simFloat pDummy1[3],pDummy2[3],pDummy3[3],pDummy4[3],pDummyMid1[3],pDummyMid2[3];
+
 	simGetObjectPosition(hDummy1,-1,pDummy1);
 	simGetObjectPosition(hDummy2,-1,pDummy2);
 	simGetObjectPosition(hDummy3,-1,pDummy3);
 	simGetObjectPosition(hDummy4,-1,pDummy4);
 	simGetObjectPosition(hDummyCentre1,-1,pDummyCentre1);
 	simGetObjectPosition(hDummyCentre2,-1,pDummyCentre2);
+	simGetObjectPosition(hCuboid1,-1,pCuboid1);
+	simGetObjectPosition(hCuboid2,-1,pCuboid2);
+	simGetObjectPosition(hCuboid3,-1,pCuboid3);
+	simGetObjectPosition(hCuboid4,-1,pCuboid4);
+
 
 	// ray circonference
 	r = sqrtf(pow(pDummy2[0] - pDummy3[0],2) + pow(pDummy2[1] - pDummy3[1],2)) * 1/2;
@@ -176,6 +193,7 @@ void Execution(){
 	simFloat pAckerCar[3];
 	simFloat eRobot[3];
 	simFloat eAckerCar[3];
+	simFloat pClosestPoint[3];
 
 	float norm_v, omega, norm_v_desired;
 
@@ -238,29 +256,8 @@ void Execution(){
 		x = pDummyCentre1[0] - r*cos(theta);   //punto sulla traiettoria coordinata x
 		y = pDummyCentre1[1] - r*sin(theta);   //punto sulla traiettoria coordinata y
 
-		std::cout << "valore di theta:  " << theta  <<"\n" << std::endl;
-		std::cout << "valore di sin(theta):  " << sin(theta) <<"\n" << std::endl;
-		std::cout << "valore di PI:  " << PI  <<"\n" << std::endl;
-		std::cout << "valore di t2:  " << t2  <<"\n" << std::endl;
-		std::cout << "valore di r:  " << r <<"\n" << std::endl;
-
-		//std::cout << "x della traettoria:  " <<x  <<"\n" << std::endl;
-		//std::cout << "y della traettoria:  " <<y  <<"\n" << std::endl;
-		//v_desired(0) = PI*r*sin(theta);
-        //v_desired(1) = -PI*r*cos(theta);
-
 		v_desired(0) =  PI*r*sin(theta)/trajDur2;
 		v_desired(1) = -PI*r*cos(theta)/trajDur2;
-		// v_desired(0) =  sin(theta);
-		// v_desired(1) = -cos(theta);
-
-
-		std::cout << "valore di v_desired(0):  " << v_desired(0)  <<"\n" << std::endl;
-		std::cout << "valore di v_desired(1):  " << v_desired(1)  <<"\n" << std::endl;
-		//x = xFin2;
-		//y = yFin2;
-		//v_desired(0) = 0;
-		//v_desired(1) = 0;
 
 	}
 	else if(t_sim > trajDur1 +trajDur2 && t_sim < trajDur1 + trajDur2 + trajDur3){
@@ -316,33 +313,35 @@ void Execution(){
 
 	// REAR WHEEL DRIVE (prova)
 
+
 	// Define random generator with Gaussian distribution
-	const double mean = 0.0;
-	const double stddev = 0.1;
-	// construct a trivial random generator engine from a time-based seed:
-	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-	std::default_random_engine generator (seed);
-	std::normal_distribution<double> distribution (mean,stddev);
+	// const double mean = 0.0;
+	// const double stddev = 0.1;
+	// // construct a trivial random generator engine from a time-based seed:
+	// unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+	// std::default_random_engine generator (seed);
+	// std::normal_distribution<double> distribution (mean,stddev);
+	//
+	// float beta = abs(distribution(generator));
+	//
+	// float vmax = 10;
+	// float hdb_x = (v_desired(0)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+	// float hdb_y = (v_desired(1)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+	//
+	// float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
+	//
+	// std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
+	// std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
+	// std::cout << " radice "<< radice <<"\n" <<std::endl;
+	// std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
+	//
+	//
+	// u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
+	// u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
 
-	float beta = abs(distribution(generator));
 
-	float vmax = 5;
-	float hdb_x = (v_desired(0)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
-	float hdb_y = (v_desired(1)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
-
-	float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
-
-	std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
-
-	std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
-	std::cout << " radice "<< radice <<"\n" <<std::endl;
-	std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
-
-	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
-	u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
-
-	// u1 = v_desired(0) + 0.1*(pd(0) - pr(0));
-	// u2 = v_desired(1) + 0.1*(pd(1) - pr(1));
+	u1 = v_desired(0) + (.1)*(pd(0) - pr(0));
+	u2 = v_desired(1) + (.1)*(pd(1) - pr(1));
 
 	// Update of the control point B
 	// [vControlT wControlT]' = Tinv*[u1 u2]'
@@ -397,13 +396,28 @@ void Execution(){
 
 
 
-	//std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
+	std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
 
 
 
 	simSetObjectPosition(hAckerCar, -1, pAckerCar);
 	simSetObjectOrientation(hAckerCar, -1, eAckerCar);
 
+	//Take the closest detected point
+	simGetObjectPosition(hClosestPoint, -1, pClosestPoint);
+	std::cout << "posizione closest point"<< "\n" << pClosestPoint[0] <<"\n" <<pClosestPoint[1]<<"\n"<< pClosestPoint[2]<<"\n" <<std::endl;
+	// std::cout << "posizione Cuboid1"<< "\n" << pCuboid1[0] <<"\n" <<pCuboid1[1]<<"\n"<< pCuboid1[2]<<"\n" <<std::endl;
+	// std::cout << "posizione Cuboid2"<< "\n" << pCuboid2[0] <<"\n" <<pCuboid2[1]<<"\n"<< pCuboid2[2]<<"\n" <<std::endl;
+	// std::cout << "posizione Cuboid3"<< "\n" << pCuboid3[0] <<"\n" <<pCuboid3[1]<<"\n"<< pCuboid3[2]<<"\n" <<std::endl;
+	// std::cout << "posizione Cuboid4"<< "\n" << pCuboid4[0] <<"\n" <<pCuboid4[1]<<"\n"<< pCuboid4[2]<<"\n" <<std::endl;
+
+	dist_closest_point = sqrt(pow(pClosestPoint[0]-pAckerCar[0],2) + pow(pClosestPoint[1]-pAckerCar[1],2));
+	std::cout << "distanza closest point"<< "\n" << dist_closest_point<<"\n"  <<std::endl;
+	if(dist_closest_point > 0.02){
+		//SCRIVERE TUTTO ALGORITMO OBSTACLE AVOIDANCE QUI DENTRO
+		//solo se facciamo detection di un cuboid
+		//0.2 è la distanza dalla closest point alla car quando viene rimesso alla posizione di default
+	}
 
 
 }
