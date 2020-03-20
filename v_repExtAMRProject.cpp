@@ -67,7 +67,7 @@ float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajec
 
 // ray circonference
 float r;
-float l = 2.32/2;
+float l = 2.1/2;
 float v_limit = 5.0;
 float phi = PI/2;
 
@@ -179,12 +179,10 @@ void Initialize(){
 
 
 void Execution(){
-	// q = (x, y, theta, phi)  // u = (v, omega)  // Eigen::Vector2f u; // control inputs
+	// q = (x, y, theta, phi)  // u = (v, omega)
 
 	Eigen::Vector4f q_k, q_kp1; // current and next configuration
 
-
-	// PROVA CONTROLLO
 	float u, u1, u2, vd;
 
 	Eigen::Vector2f v, v_desired, pd, pr;
@@ -203,24 +201,15 @@ void Execution(){
 	//std::cout << "position inizio"<< pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
 
 	//KINEMATIC MODEL
-
 	q_k << pAckerCar[0], pAckerCar[1], eAckerCar[2], phi;
 
 	float theta = eAckerCar[2];
 	float theta_car = theta + PI/2;
 	//std::cout << "theta "<<theta <<"\n" <<std::endl;
 
-	//Construct the trajectory
-	float t_sim = (float)simGetSimulationTime();
 
-	// Coordinates of point P
+	//we control these two new variable via the variable b
 	float b = 0.025;
-
-
-
-	// Normal choise of y1 y2
-	// float y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
-	// float y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
 	float y1 = pAckerCar[0] + l*cos(theta_car) + b*cos(theta_car+phi);
 	float y2 = pAckerCar[1] + l*sin(theta_car) + b*sin(theta_car+phi);
 
@@ -229,6 +218,8 @@ void Execution(){
 	//std::cout << "Punto b       y1:     " << y1 <<"\n" <<std::endl;
 	//std::cout << "Punto b       y2:     " << y2 <<"\n" <<std::endl;
 
+	//CONSTRUCT THE PREDEFINED TRAJECTORY
+	float t_sim = (float)simGetSimulationTime();
 	float x, y;
 
 	if(t_sim > 0 && t_sim < trajDur1){ 								 // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  1
@@ -260,7 +251,7 @@ void Execution(){
 		v_desired(1) = -PI*r*cos(theta)/trajDur2;
 
 	}
-	else if(t_sim > trajDur1 +trajDur2 && t_sim < trajDur1 + trajDur2 + trajDur3){
+	else if(t_sim > trajDur1 +trajDur2 && t_sim < trajDur1 + trajDur2 + trajDur3){    // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  3
 
 		float t3 = (t_sim-(trajDur1 + trajDur2)) / trajDur3;
 
@@ -274,7 +265,7 @@ void Execution(){
 
 
 	}
-	else if (t_sim > trajDur1 +trajDur2 +trajDur3 && t_sim < trajDur1 + trajDur2 + trajDur3 + trajDur4){
+	else if (t_sim > trajDur1 +trajDur2 +trajDur3 && t_sim < trajDur1 + trajDur2 + trajDur3 + trajDur4){   // TRAETTORIA PEZZO CURVILINEO        -      TRATTO  4
 
 		 float t4 = (t_sim-(trajDur1 + trajDur2 +trajDur3)) / trajDur4;
 		 float theta = PI*t4;
@@ -302,7 +293,7 @@ void Execution(){
 
 	}
 
-	// compute the control inputs (via the controller)
+	//COMPUTE THE CONTROL INPUTS (via the controller)
 
 	pd(0) = x; // position desired
 	pd(1) = y;
@@ -310,80 +301,59 @@ void Execution(){
 	pr(1) = y2;
 
 
-
-	// REAR WHEEL DRIVE (prova)
-
-
 	// Define random generator with Gaussian distribution
-	// const double mean = 0.0;
-	// const double stddev = 0.1;
-	// // construct a trivial random generator engine from a time-based seed:
-	// unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-	// std::default_random_engine generator (seed);
-	// std::normal_distribution<double> distribution (mean,stddev);
-	//
-	// float beta = abs(distribution(generator));
-	//
-	// float vmax = 10;
-	// float hdb_x = (v_desired(0)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
-	// float hdb_y = (v_desired(1)/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
-	//
-	// float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
-	//
-	// std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
-	// std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
-	// std::cout << " radice "<< radice <<"\n" <<std::endl;
-	// std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
-	//
-	//
-	// u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
-	// u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
+	const double mean = 0.0;
+	const double stddev = 0.1;
+	// construct a trivial random generator engine from a time-based seed:
+	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+	std::default_random_engine generator (seed);
+	std::normal_distribution<double> distribution (mean,stddev);
+
+	float beta = abs(distribution(generator));
+
+	float vmax = 5;
+	float hdb_x = (abs(v_desired(0))/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+	float hdb_y = (abs(v_desired(1))/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+
+	float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
+
+	std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
+	std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
+	std::cout << " radice "<< radice <<"\n" <<std::endl;
+	std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
+
+  //HDB CONTROL LAWS
+	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
+	u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
 
 
-	u1 = v_desired(0) + (.1)*(pd(0) - pr(0));
-	u2 = v_desired(1) + (.1)*(pd(1) - pr(1));
+	//REAR-WHELL DRIVE
+	// float theta_dot = (u1*cos(phi + theta_car)*sin(phi) + u2*sin(phi)*sin(phi + theta_car))*(1/l);
+	// float phi_dot = -(cos(theta_car+phi)*sin(phi)*(1/l)+sin(theta_car+phi)*(1/b))*u1-(sin(theta_car+phi)*sin(phi)*(1/l)-cos(theta_car+phi)*(1/b))*u2;
 
-	// Update of the control point B
-	// [vControlT wControlT]' = Tinv*[u1 u2]'
+	//FRONT-WHEEL DRIVE
+	float theta_dot = (sin(phi)/l)*(u1*cos(theta_car+phi) + u2*sin(theta_car+phi));
+	float phi_dot = ((u2*(2*l*cos(theta_car+phi) - b*cos(theta_car) + b*cos(theta_car+2*phi)))/(2*b*l)) - ((u1*(2*l*sin(theta_car+phi) - b*sin(theta_car) + b*sin(theta_car+2*phi)))/(2*b*l));
 
-	// float theta_dot = (u1*cos(phi + theta)*sin(phi) + u2*sin(phi)*sin(phi + theta))*(1/l);
-	// float phi_dot = -(cos(theta+phi)*sin(phi)*(1/l)+sin(theta+phi)*(1/b))*u1-(sin(theta+phi)*sin(phi)*(1/l)-cos(theta+phi)*(1/b))*u2;
-
-	float theta_dot = (u1*cos(phi + theta_car)*sin(phi) + u2*sin(phi)*sin(phi + theta_car))*(1/l);
-	float phi_dot = -(cos(theta_car+phi)*sin(phi)*(1/l)+sin(theta_car+phi)*(1/b))*u1-(sin(theta_car+phi)*sin(phi)*(1/l)-cos(theta_car+phi)*(1/b))*u2;
 
 	// Euler Integration
 	y1 = y1 + u1*dt; // u1 = y1dot
 	y2 = y2 + u2*dt; // u2 = y2dot
 
-	// theta_new = theta + theta_dot*dt
 	q_kp1(2) = theta + theta_dot *dt;
 	q_kp1(3) = phi + phi_dot *dt;
 
 	theta_car = theta_car + theta_dot *dt;
 	phi = phi + phi_dot *dt;
-	// q_kp1(2) = q_k(2);
-	// q_kp1(3) = q_k(3);
+
 
 	// y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
 	// y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
 
 	// Formula Inversa per trovare la posizione della macchina
-
-
-	// Normal choise for y1 y2 (cos and sin)
-	// q_kp1(0) = y1 - l*cos(q_kp1(2)) - b*cos(q_kp1(2)+q_kp1(3));
-	// q_kp1(1) = y2 - l*sin(q_kp1(2)) - b*sin(q_kp1(2)+q_kp1(3));
-
 	q_kp1(0) = y1 - l*cos(theta_car) - b*cos(theta_car + phi);
 	q_kp1(1) = y2 - l*sin(theta_car) - b*sin(theta_car + phi);
 
-	// // // // // // // // // // // // //
-	//REAR_WHEEL
-	// q_kp1(0) = q_k(0) + norm_v*cos(q_k(2))*dt;
-	// q_kp1(1) = q_k(1) + norm_v*sin(q_k(2))*dt;
-	// q_kp1(2) = q_k(2) + norm_v*tan(q_k(3))*(1/l)*dt;
-	// q_kp1(3) = q_k(3) + omega*dt;
 
 	// set the robot in the new configuration
 	pAckerCar[0] = q_kp1(0);
@@ -391,28 +361,25 @@ void Execution(){
 	pAckerCar[2] = zCar;
 	eAckerCar[2] = q_kp1(2);
 	phi = q_kp1(3);
-	//phi=0.0;
-
-
-
-
-	std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
-
 
 
 	simSetObjectPosition(hAckerCar, -1, pAckerCar);
 	simSetObjectOrientation(hAckerCar, -1, eAckerCar);
 
+
 	//Take the closest detected point
 	simGetObjectPosition(hClosestPoint, -1, pClosestPoint);
+	std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
 	std::cout << "posizione closest point"<< "\n" << pClosestPoint[0] <<"\n" <<pClosestPoint[1]<<"\n"<< pClosestPoint[2]<<"\n" <<std::endl;
 	// std::cout << "posizione Cuboid1"<< "\n" << pCuboid1[0] <<"\n" <<pCuboid1[1]<<"\n"<< pCuboid1[2]<<"\n" <<std::endl;
 	// std::cout << "posizione Cuboid2"<< "\n" << pCuboid2[0] <<"\n" <<pCuboid2[1]<<"\n"<< pCuboid2[2]<<"\n" <<std::endl;
 	// std::cout << "posizione Cuboid3"<< "\n" << pCuboid3[0] <<"\n" <<pCuboid3[1]<<"\n"<< pCuboid3[2]<<"\n" <<std::endl;
 	// std::cout << "posizione Cuboid4"<< "\n" << pCuboid4[0] <<"\n" <<pCuboid4[1]<<"\n"<< pCuboid4[2]<<"\n" <<std::endl;
 
-	dist_closest_point = sqrt(pow(pClosestPoint[0]-pAckerCar[0],2) + pow(pClosestPoint[1]-pAckerCar[1],2));
+	dist_closest_point = sqrtf(pow(pClosestPoint[0]-pAckerCar[0],2) + pow(pClosestPoint[1]-pAckerCar[1],2));
 	std::cout << "distanza closest point"<< "\n" << dist_closest_point<<"\n"  <<std::endl;
+
+
 	if(dist_closest_point > 0.02){
 		//SCRIVERE TUTTO ALGORITMO OBSTACLE AVOIDANCE QUI DENTRO
 		//solo se facciamo detection di un cuboid
