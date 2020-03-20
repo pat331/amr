@@ -169,9 +169,9 @@ void Initialize(){
 
 	dt = (float)simGetSimulationTimeStep();
 
-	trajDur1 = 10.0;
+	trajDur1 = 20.0;
 	trajDur2 = 10.0;
-	trajDur3 = 10.0;
+	trajDur3 = 20.0;
 	trajDur4 = 10.0;
 
 	std::cout << "Initialization Completed" << std::endl;
@@ -311,7 +311,7 @@ void Execution(){
 
 	float beta = abs(distribution(generator));
 
-	float vmax = 5;
+	float vmax = 10;
 	float hdb_x = (abs(v_desired(0))/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
 	float hdb_y = (abs(v_desired(1))/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
 
@@ -326,6 +326,8 @@ void Execution(){
 	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
 	u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
 
+	// u1 = v_desired(0) + 1.1 * (pd(0) - pr(0));
+	// u2 = v_desired(1) + 1.1 * (pd(1) - pr(1));
 
 	//REAR-WHELL DRIVE
 	// float theta_dot = (u1*cos(phi + theta_car)*sin(phi) + u2*sin(phi)*sin(phi + theta_car))*(1/l);
