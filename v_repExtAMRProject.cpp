@@ -67,9 +67,10 @@ float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajec
 
 // ray circonference
 float r;
-float l = 2.1/2;
+// float l = 2.1/2;
+float l = 0.5;
 float v_limit = 5.0;
-float phi = PI/2;
+float phi = 0;
 
 float dist_closest_point;
 
@@ -101,8 +102,9 @@ void Initialize(){
 	// hAckerCar = simGetObjectHandle("AckermannCar");
 	hAckerCar = simGetObjectHandle("Car");
 
-	simFloat pRobot[3];
-	simGetObjectPosition(hRobot, -1, pRobot);
+	simFloat pAckerCar[3];
+	// simGetObjectPosition(hRobot, -1, pRobot);
+	simGetObjectPosition(hAckerCar, -1, pAckerCar);
 
 
 	simFloat pDummy1[3],pDummy2[3],pDummy3[3],pDummy4[3],pDummyMid1[3],pDummyMid2[3];
@@ -169,10 +171,10 @@ void Initialize(){
 
 	dt = (float)simGetSimulationTimeStep();
 
-	trajDur1 = 20.0;
-	trajDur2 = 10.0;
-	trajDur3 = 20.0;
-	trajDur4 = 10.0;
+	trajDur1 = 5.0;
+	trajDur2 = 5.0;
+	trajDur3 = 2.0;
+	trajDur4 = 5.0;
 
 	std::cout << "Initialization Completed" << std::endl;
 }
@@ -209,7 +211,7 @@ void Execution(){
 
 
 	//we control these two new variable via the variable b
-	float b = 0.025;
+	float b = 0.55;
 	float y1 = pAckerCar[0] + l*cos(theta_car) + b*cos(theta_car+phi);
 	float y2 = pAckerCar[1] + l*sin(theta_car) + b*sin(theta_car+phi);
 
@@ -222,7 +224,7 @@ void Execution(){
 	float t_sim = (float)simGetSimulationTime();
 	float x, y;
 
-	if(t_sim > 0 && t_sim < trajDur1){ 								 // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  1
+	if(t_sim >= 0 && t_sim <= trajDur1){ 								 // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  1
 
 		float t1 = t_sim / trajDur1;
 
@@ -236,7 +238,7 @@ void Execution(){
 		// std::cout << "t sim < trajDur1" <<"\n" <<std::endl;
      }
 
-	else if(t_sim > trajDur1 && t_sim < trajDur1 + trajDur2){				// TRAETTORIA PEZZO CURVILINEO        -      TRATTO  2
+	else if(t_sim > trajDur1 && t_sim <= trajDur1 + trajDur2){				// TRAETTORIA PEZZO CURVILINEO        -      TRATTO  2
 		std::cout << "SONO NELLA TRAETTORIA CIRCOLARE 2 " << std::endl;
 
 		// //traiettoria circolare
@@ -251,7 +253,7 @@ void Execution(){
 		v_desired(1) = -PI*r*cos(theta)/trajDur2;
 
 	}
-	else if(t_sim > trajDur1 +trajDur2 && t_sim < trajDur1 + trajDur2 + trajDur3){    // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  3
+	else if(t_sim > trajDur1 +trajDur2 && t_sim <= trajDur1 + trajDur2 + trajDur3){    // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  3
 
 		float t3 = (t_sim-(trajDur1 + trajDur2)) / trajDur3;
 
@@ -265,7 +267,7 @@ void Execution(){
 
 
 	}
-	else if (t_sim > trajDur1 +trajDur2 +trajDur3 && t_sim < trajDur1 + trajDur2 + trajDur3 + trajDur4){   // TRAETTORIA PEZZO CURVILINEO        -      TRATTO  4
+	else if (t_sim > trajDur1 +trajDur2 +trajDur3 && t_sim <= trajDur1 + trajDur2 + trajDur3 + trajDur4){   // TRAETTORIA PEZZO CURVILINEO        -      TRATTO  4
 
 		 float t4 = (t_sim-(trajDur1 + trajDur2 +trajDur3)) / trajDur4;
 		 float theta = PI*t4;
@@ -277,7 +279,7 @@ void Execution(){
 		 v_desired(1) = PI*r*cos(PI*t4)/ trajDur4;
 
 	}
-	else{
+	else if(t_sim > trajDur1 + trajDur2 + trajDur3 + trajDur4){
 
 		//x = xFin3;
 		//y = yFin3;
@@ -300,6 +302,9 @@ void Execution(){
 	pr(0) = y1; // robot position
 	pr(1) = y2;
 
+	// Error in position
+	float pos_error = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
+	std::cout << "pos_error "<<pos_error <<"\n" <<std::endl;
 
 	// Define random generator with Gaussian distribution
 	const double mean = 0.0;
@@ -317,10 +322,10 @@ void Execution(){
 
 	float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
 
-	std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
-	std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
-	std::cout << " radice "<< radice <<"\n" <<std::endl;
-	std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
+	// std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
+	// std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
+	// std::cout << " radice "<< radice <<"\n" <<std::endl;
+	// std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
 
   //HDB CONTROL LAWS
 	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
