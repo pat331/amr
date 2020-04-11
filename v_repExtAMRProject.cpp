@@ -47,8 +47,8 @@
 LIBRARY vrepLib; // the V-REP library that we will dynamically load and bind
 
 simInt hRobot, hAckerCar, hsteeringLeft, hsteeringRight, hmotorLeft, hmotorRight; // robot handle
-simInt hDummy1,hDummy2,hDummy3,hDummy4,hDummyMid1,hDummyMid2,hDummyCentre1,hDummyCentre2;
-simInt hClosestPoint;
+simInt hDummy1,hDummy2,hDummy3,hDummy4,hDummyMid1,hDummyMid2,hDummyCentre1,hDummyCentre2,hDummyEvasive1,hDummyBack1,hDummyEvasive2,hDummyBack2;
+simInt hClosestPointFront,hClosestPointRight ;
 simInt hCuboid1,hCuboid2,hCuboid3,hCuboid4;
 
 simFloat pDummyCentre1[3], pDummyCentre2[3];
@@ -59,11 +59,14 @@ float yIni1, yIni2, yIni3, yIni4;
 float zIni1, zIni2, zCar; // z-component of the robot position (it will be constant during the simulation)
 float xFin2, xFin3, xFin4, xFin5;
 float yFin2, yFin3, yFin4, yFin5;
+float xEv1, yEv1, yBack1, yBack2, xEv2, yEv2;
+float inflec1, inflec2;
+float x_end_ev, y_end_ev;
 
 
 
 float dt; // control timestep (can be modified directly in the V-REP scene)
-float trajDur1, trajDur2, trajDur3, trajDur4; // duration of the assigned trajectory
+float trajDur1, trajDur2, trajDur3, trajDur4, trajDurEvasive, trajDur1Back, trajDurEvasive2, trajDur2Back; // duration of the assigned trajectory
 
 // ray circonference
 float r;
@@ -71,8 +74,21 @@ float r;
 float l = 0.5;
 float v_limit = 5.0;
 float phi = 0;
+float y_m1, y_m2;
+float a = 1.0;
+float a2 = -1.0;
+float half_cuboid1 = 0.25;
+float half_cuboid2 = 0.5;
+float half_width_car = 0.25;
+float x_s = 0.15; // safety distance
 
-float dist_closest_point;
+
+float dist_closest_point_front, dist_closest_point_right, min_dist;
+
+//direcrtion = 0 --->osservo con kinect front
+//direction = 1 --->osservo con kinect right
+int direction = -1;
+
 
 
 void Initialize(){
@@ -88,26 +104,23 @@ void Initialize(){
 	hDummyMid2 = simGetObjectHandle("DummyMid2");
 	hDummyCentre1 = simGetObjectHandle("DummyCentre1");
 	hDummyCentre2 = simGetObjectHandle("DummyCentre2");
-	hClosestPoint = simGetObjectHandle("closestDetectedPoint");
+	hClosestPointFront = simGetObjectHandle("closestDetectedPointFront");
+	hClosestPointRight = simGetObjectHandle("closestDetectedPointRight");
 	hCuboid1 = simGetObjectHandle("Cuboid1");
 	hCuboid2 = simGetObjectHandle("Cuboid2");
 	hCuboid3 = simGetObjectHandle("Cuboid3");
 	hCuboid4 = simGetObjectHandle("Cuboid4");
-
-
+	hDummyEvasive1 = simGetObjectHandle("DummyEvasive1");
+	hDummyEvasive2 = simGetObjectHandle("DummyEvasive2");
+	hDummyBack1 = simGetObjectHandle("DummyBack1");
+	hDummyBack2 = simGetObjectHandle("DummyBack2");
 
 
 	// Ackeramann Car Robot Handle
-
-	// hAckerCar = simGetObjectHandle("AckermannCar");
 	hAckerCar = simGetObjectHandle("Car");
 
-	simFloat pAckerCar[3];
-	// simGetObjectPosition(hRobot, -1, pRobot);
-	simGetObjectPosition(hAckerCar, -1, pAckerCar);
 
-
-	simFloat pDummy1[3],pDummy2[3],pDummy3[3],pDummy4[3],pDummyMid1[3],pDummyMid2[3];
+	simFloat pDummy1[3],pDummy2[3],pDummy3[3],pDummy4[3],pDummyMid1[3],pDummyMid2[3],pDummyEvasive1[3],pDummyBack1[3],pDummyEvasive2[3],pDummyBack2[3];
 
 	simGetObjectPosition(hDummy1,-1,pDummy1);
 	simGetObjectPosition(hDummy2,-1,pDummy2);
@@ -119,6 +132,19 @@ void Initialize(){
 	simGetObjectPosition(hCuboid2,-1,pCuboid2);
 	simGetObjectPosition(hCuboid3,-1,pCuboid3);
 	simGetObjectPosition(hCuboid4,-1,pCuboid4);
+	simGetObjectPosition(hDummyEvasive1,-1,pDummyEvasive1);
+	simGetObjectPosition(hDummyEvasive2,-1,pDummyEvasive2);
+	simGetObjectPosition(hDummyBack1,-1,pDummyBack1);
+	simGetObjectPosition(hDummyBack2,-1,pDummyBack2);
+
+	//Compute interesting quantities for evasive trajectory
+	inflec1 = sqrtf(pow(pDummyEvasive1[0] - pCuboid1[0],2) + pow(pDummyEvasive1[1] - pCuboid1[1],2)) - half_cuboid1 - l;
+	y_m1 = half_cuboid1 + half_width_car + x_s;
+	inflec2 = -(sqrtf(pow(pDummyEvasive2[0] - pCuboid2[0],2) + pow(pDummyEvasive2[1] - pCuboid2[1],2)) - half_cuboid2 - l);
+	// std::cout << "inflect 2:  "<< inflec2 <<"\n" <<std::endl;
+	// std::cout << "inflect 1:  "<< inflec1 <<"\n" <<std::endl;
+
+	y_m2 = -(half_cuboid2 + half_width_car + x_s);
 
 
 	// ray circonference
@@ -165,16 +191,38 @@ void Initialize(){
 	xFin5 = pDummy1[0];
 	yFin5 = pDummy1[1];
 
+	xEv1 = pDummyEvasive1[0];
+	yEv1 = pDummyEvasive1[1];
 
+	yBack1 = pDummyBack1[1];
 
+	xEv2 = pDummyEvasive2[0];
+	yEv2 = pDummyEvasive2[1];
+
+	yBack2 = pDummyBack2[1];
 
 
 	dt = (float)simGetSimulationTimeStep();
 
-	trajDur1 = 5.0;
-	trajDur2 = 5.0;
-	trajDur3 = 2.0;
-	trajDur4 = 5.0;
+	trajDur1 = 1.25;
+	trajDurEvasive = 1.25;
+	trajDur1Back = 2.25;
+	// trajDur1 = 1.0;
+	// trajDurEvasive = 1.0;
+	// trajDur1Back = 1.4;
+
+	// trajDur2 = 5.0;
+	trajDur2 = 4.0;
+
+	trajDur3 = 1.25;
+	trajDurEvasive2 = 1.25;
+	trajDur2Back = 2.25;
+	// trajDur3 = 1.0;
+	// trajDurEvasive2 = 1.0;
+	// trajDur2Back = 1.4;
+
+	// trajDur4 = 5.0;
+	trajDur4 = 4.0;
 
 	std::cout << "Initialization Completed" << std::endl;
 }
@@ -193,9 +241,10 @@ void Execution(){
 	simFloat pAckerCar[3];
 	simFloat eRobot[3];
 	simFloat eAckerCar[3];
-	simFloat pClosestPoint[3];
+	simFloat pClosestPointFront[3], pClosestPointRight[3];
 
 	float norm_v, omega, norm_v_desired;
+
 
 	// get the current configuration
 	simGetObjectPosition(hAckerCar, -1, pAckerCar);
@@ -207,11 +256,12 @@ void Execution(){
 
 	float theta = eAckerCar[2];
 	float theta_car = theta + PI/2;
-	//std::cout << "theta "<<theta <<"\n" <<std::endl;
-
+	// std::cout << "theta "<<theta <<"\n" <<std::endl;
+	// std::cout << "theta car "<<theta_car <<"\n" <<std::endl;
 
 	//we control these two new variable via the variable b
-	float b = 0.55;
+	// float b = 0.55;
+	float b = 0.65;
 	float y1 = pAckerCar[0] + l*cos(theta_car) + b*cos(theta_car+phi);
 	float y2 = pAckerCar[1] + l*sin(theta_car) + b*sin(theta_car+phi);
 
@@ -222,27 +272,58 @@ void Execution(){
 
 	//CONSTRUCT THE PREDEFINED TRAJECTORY
 	float t_sim = (float)simGetSimulationTime();
-	float x, y;
+	float x = 0, y = 0;
 
 	if(t_sim >= 0 && t_sim <= trajDur1){ 								 // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  1
 
 		float t1 = t_sim / trajDur1;
 
-		x = t1 * xFin2 + (1 - t1) * xIni1;
-		y = t1 * yFin2 + (1 - t1) * yIni1;
+		x = t1 * xEv1 + (1 - t1) * xIni1;
 
-		float square_distance = sqrt(pow(xFin2 - xIni1,2)+pow(yFin2 - yIni1,2));
+		y = t1 * yEv1 + (1 - t1) * yIni1;
 
-		v_desired(0) = (xFin2 - xIni1)/trajDur1;
-		v_desired(1) = (yFin2 - yIni1)/trajDur1;
-		// std::cout << "t sim < trajDur1" <<"\n" <<std::endl;
+		v_desired(0) = (xEv1 - xIni1)/trajDur1;
+		v_desired(1) = (yEv1 - yIni1)/trajDur1;
+
+		std::cout << "Sono nel rettilineo 1" <<"\n" <<std::endl;
+
      }
+	else if (t_sim > trajDur1 && t_sim <= trajDur1 + trajDurEvasive){  //TRAIETTORIA EVASIVE
 
-	else if(t_sim > trajDur1 && t_sim <= trajDur1 + trajDur2){				// TRAETTORIA PEZZO CURVILINEO        -      TRATTO  2
-		std::cout << "SONO NELLA TRAETTORIA CIRCOLARE 2 " << std::endl;
+		float t_ev = (t_sim-trajDur1) / trajDurEvasive;
+
+		//traiettoria lineare per la y
+		y = t_ev * yBack1 + (1 - t_ev) * yEv1;
+		//evasive trajectory per la x
+		x = y_m1 / (1 + exp(-a*y + a*inflec1));
+
+		v_desired(0) = ((yBack1-yEv1)/trajDurEvasive)*(a*y_m1*exp(-a*y+a*inflec1))/pow((exp(-a*y+a*inflec1)+1),2);
+		v_desired(1) = (yBack1-yEv1)/trajDurEvasive;
+
+		x_end_ev = y1;
+		y_end_ev = y2;
+
+		std::cout << "Sono nell'evasive 1" <<"\n" <<std::endl;
+
+	}
+	else if (t_sim > trajDur1 + trajDurEvasive && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back ){ // TRAIETTORIA RIENTRO
+
+		float t_back = (t_sim-(trajDur1 + trajDurEvasive)) / trajDur1Back;
+
+		x = t_back * xFin2 + (1 - t_back) * x_end_ev;
+
+		y = t_back * yFin2 + (1 - t_back) * y_end_ev;
+
+		v_desired(0) = (xFin2 - x_end_ev)/trajDur1Back;
+		v_desired(1) = (yFin2 - y_end_ev)/trajDur1Back;
+
+		std::cout << "Sono nel rientro 1" <<"\n" <<std::endl;
+	}
+	else if(t_sim > trajDur1 + trajDurEvasive + trajDur1Back && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back + trajDur2){				// TRAETTORIA PEZZO CURVILINEO        -      TRATTO  2
+		//std::cout << "SONO NELLA TRAETTORIA CIRCOLARE 1" << std::endl;
 
 		// //traiettoria circolare
-		float t2 = (t_sim-trajDur1) / trajDur2;
+		float t2 = (t_sim-(trajDur1 + trajDurEvasive + trajDur1Back)) / trajDur2;
 		float theta = PI*t2;
 
 
@@ -252,37 +333,66 @@ void Execution(){
 		v_desired(0) =  PI*r*sin(theta)/trajDur2;
 		v_desired(1) = -PI*r*cos(theta)/trajDur2;
 
-	}
-	else if(t_sim > trajDur1 +trajDur2 && t_sim <= trajDur1 + trajDur2 + trajDur3){    // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  3
-
-		float t3 = (t_sim-(trajDur1 + trajDur2)) / trajDur3;
-
-		float square_distance = sqrt(pow(xFin4 - xIni3,2)+pow(yFin4 - yIni3,2));
-
-		x = t3 * xFin4 + (1 - t3) * xIni3;
-		y = t3 * yFin4 + (1 - t3) * yIni3;
-
-		v_desired(0) = (xFin4 - xIni3)/trajDur3;
-		v_desired(1) = (yFin4 - yIni3)/trajDur3;
-
+		std::cout << "Sono nella curva 1" <<"\n" <<std::endl;
 
 	}
-	else if (t_sim > trajDur1 +trajDur2 +trajDur3 && t_sim <= trajDur1 + trajDur2 + trajDur3 + trajDur4){   // TRAETTORIA PEZZO CURVILINEO        -      TRATTO  4
+	else if(t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3){    // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  3
 
-		 float t4 = (t_sim-(trajDur1 + trajDur2 +trajDur3)) / trajDur4;
+		float t3 = (t_sim-(trajDur1 + trajDurEvasive + trajDur1Back + trajDur2)) / trajDur3;
+
+		x = t3 * xEv2 + (1 - t3) * xIni3;
+		y = t3 * yEv2 + (1 - t3) * yIni3;
+
+		v_desired(0) = (xEv2 - xIni3)/trajDur3;
+		v_desired(1) = (yEv2 - yIni3)/trajDur3;
+
+		std::cout << "Sono nel rettilineo 2" <<"\n" <<std::endl;
+	}
+	else if(t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2){  //TRAIETTORIA EVASIVE 2
+
+		float t_ev = (t_sim-(trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3)) / trajDurEvasive2;
+
+		//traiettoria lineare per la y
+		y = t_ev * yBack2 + (1 - t_ev) * yEv2;
+		//evasive trajectory per la x
+		x = y_m2 / (1 + exp(-a2*y + a2*inflec2));
+
+		v_desired(0) = ((yBack2-yEv2)/trajDurEvasive2)*(a2*y_m2*exp(-a2*y+a2*inflec2))/pow((exp(-a2*y+a2*inflec2)+1),2);
+		v_desired(1) = (yBack2-yEv2)/trajDurEvasive2;
+
+		x_end_ev = y1;
+		y_end_ev = y2;
+
+		std::cout << "Sono nell'evasive 2" <<"\n" <<std::endl;
+
+	}
+	else if(t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back){ //TRAIETTORIA RIENTRO
+
+		float t_back = (t_sim-(trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2)) / trajDur2Back;
+
+		x = t_back * xFin4 + (1 - t_back) * x_end_ev;
+
+		y = t_back * yFin4 + (1 - t_back) * y_end_ev;
+
+		v_desired(0) = (xFin4 - x_end_ev)/trajDur2Back;
+		v_desired(1) = (yFin4 - y_end_ev)/trajDur2Back;
+
+		std::cout << "Sono nel rientro 2" <<"\n" <<std::endl;
+	}
+	else if (t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back + trajDur4){   // TRAETTORIA PEZZO CURVILINEO        -      TRATTO  4
+
+		 float t4 = (t_sim-(trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back)) / trajDur4;
 		 float theta = PI*t4;
 
-		x = pDummyCentre2[0] + r*cos(theta);
+		 x = pDummyCentre2[0] + r*cos(theta);
 		 y = pDummyCentre2[1] + r*sin(theta);
 
 		 v_desired(0) = -PI*r*sin(PI*t4)/ trajDur4;
 		 v_desired(1) = PI*r*cos(PI*t4)/ trajDur4;
 
+		 std::cout << "Sono nella curva 2" <<"\n" <<std::endl;
 	}
-	else if(t_sim > trajDur1 + trajDur2 + trajDur3 + trajDur4){
-
-		//x = xFin3;
-		//y = yFin3;
+	else if(t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back + trajDur4){
 
 		x = xFin5;
 		y = yFin5;
@@ -303,8 +413,13 @@ void Execution(){
 	pr(1) = y2;
 
 	// Error in position
-	float pos_error = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
-	std::cout << "pos_error "<<pos_error <<"\n" <<std::endl;
+	// float pos_error = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
+	// std::cout << "pos_error "<<pos_error <<"\n" <<std::endl;
+	// std::cout << "pd_x "<<pd(0)<<"\n" <<std::endl;
+	// std::cout << "pr_x "<<pr(0)<<"\n" <<std::endl;
+	// std::cout << "pd_y "<<pd(1)<<"\n" <<std::endl;
+	// std::cout << "pr_y "<<pr(1)<<"\n" <<std::endl;
+
 
 	// Define random generator with Gaussian distribution
 	const double mean = 0.0;
@@ -331,6 +446,9 @@ void Execution(){
 	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
 	u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
 
+	// std::cout << "u1 "<<u1 <<"\n" <<std::endl;
+	// std::cout << "u2 "<<u2 <<"\n" <<std::endl;
+
 	// u1 = v_desired(0) + 1.1 * (pd(0) - pr(0));
 	// u2 = v_desired(1) + 1.1 * (pd(1) - pr(1));
 
@@ -339,9 +457,14 @@ void Execution(){
 	// float phi_dot = -(cos(theta_car+phi)*sin(phi)*(1/l)+sin(theta_car+phi)*(1/b))*u1-(sin(theta_car+phi)*sin(phi)*(1/l)-cos(theta_car+phi)*(1/b))*u2;
 
 	//FRONT-WHEEL DRIVE
-	float theta_dot = (sin(phi)/l)*(u1*cos(theta_car+phi) + u2*sin(theta_car+phi));
-	float phi_dot = ((u2*(2*l*cos(theta_car+phi) - b*cos(theta_car) + b*cos(theta_car+2*phi)))/(2*b*l)) - ((u1*(2*l*sin(theta_car+phi) - b*sin(theta_car) + b*sin(theta_car+2*phi)))/(2*b*l));
+	float v_commanded = (u1*cos(theta_car+phi) + u2*sin(theta_car+phi));
+	float omega_commanded = ((u2*(2*l*cos(theta_car+phi) - b*cos(theta_car) + b*cos(theta_car+2*phi)))/(2*b*l)) - ((u1*(2*l*sin(theta_car+phi) - b*sin(theta_car) + b*sin(theta_car+2*phi)))/(2*b*l));
 
+	float theta_dot = (sin(phi)/l)*v_commanded;
+	float phi_dot = omega_commanded;
+
+	// std::cout << "theta_dot "<<theta_dot <<"\n" <<std::endl;
+	// std::cout << "phi_dot "<<phi_dot <<"\n" <<std::endl;
 
 	// Euler Integration
 	y1 = y1 + u1*dt; // u1 = y1dot
@@ -375,22 +498,40 @@ void Execution(){
 
 
 	//Take the closest detected point
-	simGetObjectPosition(hClosestPoint, -1, pClosestPoint);
-	std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
-	std::cout << "posizione closest point"<< "\n" << pClosestPoint[0] <<"\n" <<pClosestPoint[1]<<"\n"<< pClosestPoint[2]<<"\n" <<std::endl;
-	// std::cout << "posizione Cuboid1"<< "\n" << pCuboid1[0] <<"\n" <<pCuboid1[1]<<"\n"<< pCuboid1[2]<<"\n" <<std::endl;
-	// std::cout << "posizione Cuboid2"<< "\n" << pCuboid2[0] <<"\n" <<pCuboid2[1]<<"\n"<< pCuboid2[2]<<"\n" <<std::endl;
-	// std::cout << "posizione Cuboid3"<< "\n" << pCuboid3[0] <<"\n" <<pCuboid3[1]<<"\n"<< pCuboid3[2]<<"\n" <<std::endl;
-	// std::cout << "posizione Cuboid4"<< "\n" << pCuboid4[0] <<"\n" <<pCuboid4[1]<<"\n"<< pCuboid4[2]<<"\n" <<std::endl;
+	simGetObjectPosition(hClosestPointFront, -1, pClosestPointFront);
+	// std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
+	// std::cout << "posizione closest point"<< "\n" << pClosestPointFront[0] <<"\n" <<pClosestPointFront[1]<<"\n"<< pClosestPointFront[2]<<"\n" <<std::endl;
+	simGetObjectPosition(hClosestPointRight, -1, pClosestPointRight);
 
-	dist_closest_point = sqrtf(pow(pClosestPoint[0]-pAckerCar[0],2) + pow(pClosestPoint[1]-pAckerCar[1],2));
-	std::cout << "distanza closest point"<< "\n" << dist_closest_point<<"\n"  <<std::endl;
+	dist_closest_point_front = sqrtf(pow(pClosestPointFront[0]-pAckerCar[0],2) + pow(pClosestPointFront[1]-pAckerCar[1],2));
+	std::cout << "distanza closest point front"<< "\n" << dist_closest_point_front<<"\n"  <<std::endl;
+	dist_closest_point_right = sqrtf(pow(pClosestPointRight[0]-pAckerCar[0],2) + pow(pClosestPointRight[1]-pAckerCar[1],2));
+	std::cout << "distanza closest point right"<< "\n" << dist_closest_point_right<<"\n"  <<std::endl;
+
+	if(dist_closest_point_front == 0.02 && dist_closest_point_right == 0.02){
+
+		min_dist = 100;
+		direction = -1;
+
+		std::cout << "NON STO OSSERVANDO NIENTE"<< "\n" <<std::endl;
 
 
-	if(dist_closest_point > 0.02){
-		//SCRIVERE TUTTO ALGORITMO OBSTACLE AVOIDANCE QUI DENTRO
+	}
+	else if(dist_closest_point_front > 0.02){
 		//solo se facciamo detection di un cuboid
 		//0.2 è la distanza dalla closest point alla car quando viene rimesso alla posizione di default
+		min_dist = dist_closest_point_front;
+		direction = 0;
+		std::cout << "min_dist"<< "\n" << min_dist<<"\n"  <<std::endl;
+		std::cout << "STO OSSERVANDO CON KINECT FRONT"<< "\n" <<std::endl;
+
+	}
+	else if (dist_closest_point_right > 0.02){
+
+		min_dist = dist_closest_point_right;
+		direction = 1;
+		std::cout << "min_dist"<< "\n" << min_dist<<"\n"  <<std::endl;
+		std::cout << "STO OSSERVANDO CON KINECT RIGHT"<< "\n" <<std::endl;
 	}
 
 
