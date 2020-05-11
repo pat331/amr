@@ -46,20 +46,20 @@
 
 LIBRARY vrepLib; // the V-REP library that we will dynamically load and bind
 
-simInt hRobot, hAckerCar, hsteeringLeft, hsteeringRight, hmotorLeft, hmotorRight; // robot handle
-simInt hDummy1,hDummy2,hDummy3,hDummy4,hDummyMid1,hDummyMid2,hDummyCentre1,hDummyCentre2,hDummyEvasive1,hDummyBack1,hDummyEvasive2,hDummyBack2;
-simInt hClosestPointFront,hClosestPointRight ;
-simInt hCuboid1,hCuboid2,hCuboid3,hCuboid4;
+simInt hAckerCar; // robot handle
+simInt hDummy1,hDummy2,hDummy3,hDummy4,hDummyMid1,hDummyMid2,hDummyCentre1,hDummyCentre2,hDummyEvasive1,hDummyBack1,hDummyEvasive2,hDummyBack2,hDummyOB1,hDummyBackOB1,hDummyMidCircle1,hDummyOB2,hDummyBackOB2,hDummyMidCircle2;
+simInt hClosestPointFront;
+simInt hCuboid1,hCuboid2; // obstacles
 
 simFloat pDummyCentre1[3], pDummyCentre2[3];
-simFloat pCuboid1[3],pCuboid2[3],pCuboid3[3],pCuboid4[3];
+simFloat pCuboid1[3],pCuboid2[3];
 
 float xIni1, xIni2, xIni3, xIni4;
 float yIni1, yIni2, yIni3, yIni4;
 float zIni1, zIni2, zCar; // z-component of the robot position (it will be constant during the simulation)
 float xFin2, xFin3, xFin4, xFin5;
 float yFin2, yFin3, yFin4, yFin5;
-float xEv1, yEv1, yBack1, yBack2, xEv2, yEv2;
+float xEv1, yEv1, xBack1, yBack1, yBack2, xEv2, yEv2, xEv1_CAR, yEv1_CAR, xEv1_CAR_Predicted, yEv1_CAR_Predicted, xOB1, yOB1, xBackOB1, yBackOB1, xMidCircle1, yMidCircle1, xOB2, yOB2, xBackOB2, yBackOB2, xMidCircle2, yMidCircle2;
 float inflec1, inflec2;
 float x_end_ev, y_end_ev;
 
@@ -70,10 +70,10 @@ float trajDur1, trajDur2, trajDur3, trajDur4, trajDurEvasive, trajDur1Back, traj
 
 // ray circonference
 float r;
-// float l = 2.1/2;
 float l = 0.5;
-float v_limit = 5.0;
+float v_limit = 10.0;
 float phi = 0;
+//evasive trajectory
 float y_m1, y_m2;
 float a = 1.0;
 float a2 = -1.0;
@@ -82,12 +82,43 @@ float half_cuboid2 = 0.5;
 float half_width_car = 0.25;
 float x_s = 0.15; // safety distance
 
+//velocity and acceleration limits
+float v_max = 10.0;
+// float v_min = 0.0;
+float v_min = 0.1;
+float w_max = 5.0;
+float w_min = -5.0;
+// float w_max = 1.0;
+// float w_min = -1.0;
+float v_dot_max = 15.0;
+float w_dot_max = 10.0; //traiettoria dritta
+// float w_dot_max = 5.0; //traiettoria sicura
 
-float dist_closest_point_front, dist_closest_point_right, min_dist;
+//commanded velocities
+float v_commanded = 0.0;
+float omega_commanded = 0.0;
+float v_predicted, omega_predicted;
+float x_ok, y_ok, theta_ok, phi_ok;
+// float nIntegration = 20; //traiettoria sicura
+float nIntegration = 40; //traiettoria dritta
 
-//direcrtion = 0 --->osservo con kinect front
-//direction = 1 --->osservo con kinect right
-int direction = -1;
+
+float dist_closest_point_front, min_dist;
+
+//DWA
+float phi_predicted, theta_predicted, x_predicted, y_predicted, f_velocity, f_heading, f_dist, f_DWA, distToGoal, f_distGoal;
+float alpha = 0.2; //traiettoria dritta(prende in pieno l'ostacolo)
+// float alpha = 1; //traiettoria sicura
+// float beta = 0.3; //traiettoria sicura
+float beta = 10.0; //traiettoria dritta
+float my_gamma = 0.5;
+float	DWA_max;
+Eigen::Vector3f pDummyEvasive1_CAR_Hom_frameOld, pDummyEvasive1_CAR_Hom_framePredicted, pDummy1WorldFrame;
+
+bool traiettoriaSafe = false;
+// float my_atan(float y, float x);
+
+/////////////////////////////////////////////////////////////////////////
 
 
 
@@ -95,7 +126,6 @@ void Initialize(){
 	std::cout << "Initializing..." << std::endl;
 
 	// Cuboid Handle
-	//hRobot = simGetObjectHandle("Cuboid");
 	hDummy1 = simGetObjectHandle("Dummy1");
 	hDummy2 = simGetObjectHandle("Dummy2");
 	hDummy3 = simGetObjectHandle("Dummy3");
@@ -105,22 +135,24 @@ void Initialize(){
 	hDummyCentre1 = simGetObjectHandle("DummyCentre1");
 	hDummyCentre2 = simGetObjectHandle("DummyCentre2");
 	hClosestPointFront = simGetObjectHandle("closestDetectedPointFront");
-	hClosestPointRight = simGetObjectHandle("closestDetectedPointRight");
 	hCuboid1 = simGetObjectHandle("Cuboid1");
 	hCuboid2 = simGetObjectHandle("Cuboid2");
-	hCuboid3 = simGetObjectHandle("Cuboid3");
-	hCuboid4 = simGetObjectHandle("Cuboid4");
 	hDummyEvasive1 = simGetObjectHandle("DummyEvasive1");
 	hDummyEvasive2 = simGetObjectHandle("DummyEvasive2");
 	hDummyBack1 = simGetObjectHandle("DummyBack1");
 	hDummyBack2 = simGetObjectHandle("DummyBack2");
-
+	hDummyOB1 = simGetObjectHandle("DummyOB1");
+	hDummyBackOB1 = simGetObjectHandle("DummyBackOB1");
+	hDummyMidCircle1 = simGetObjectHandle("DummyMidCircle1");
+	hDummyOB2 = simGetObjectHandle("DummyOB2");
+	hDummyBackOB2 = simGetObjectHandle("DummyBackOB2");
+	hDummyMidCircle2 = simGetObjectHandle("DummyMidCircle2");
 
 	// Ackeramann Car Robot Handle
 	hAckerCar = simGetObjectHandle("Car");
 
 
-	simFloat pDummy1[3],pDummy2[3],pDummy3[3],pDummy4[3],pDummyMid1[3],pDummyMid2[3],pDummyEvasive1[3],pDummyBack1[3],pDummyEvasive2[3],pDummyBack2[3];
+	simFloat pDummy1[3],pDummy2[3],pDummy3[3],pDummy4[3],pDummyMid1[3],pDummyMid2[3],pDummyEvasive1[3],pDummyBack1[3],pDummyEvasive2[3],pDummyBack2[3],pDummyEvasive1_CAR[3],pDummyOB1[3],pDummyBackOB1[3],pDummyMidCircle1[3],pDummyOB2[3],pDummyBackOB2[3],pDummyMidCircle2[3];
 
 	simGetObjectPosition(hDummy1,-1,pDummy1);
 	simGetObjectPosition(hDummy2,-1,pDummy2);
@@ -130,12 +162,20 @@ void Initialize(){
 	simGetObjectPosition(hDummyCentre2,-1,pDummyCentre2);
 	simGetObjectPosition(hCuboid1,-1,pCuboid1);
 	simGetObjectPosition(hCuboid2,-1,pCuboid2);
-	simGetObjectPosition(hCuboid3,-1,pCuboid3);
-	simGetObjectPosition(hCuboid4,-1,pCuboid4);
 	simGetObjectPosition(hDummyEvasive1,-1,pDummyEvasive1);
+	simGetObjectPosition(hDummyEvasive1,hAckerCar,pDummyEvasive1_CAR);
+
 	simGetObjectPosition(hDummyEvasive2,-1,pDummyEvasive2);
 	simGetObjectPosition(hDummyBack1,-1,pDummyBack1);
 	simGetObjectPosition(hDummyBack2,-1,pDummyBack2);
+
+	simGetObjectPosition(hDummyOB1,-1,pDummyOB1);
+	simGetObjectPosition(hDummyBackOB1,-1,pDummyBackOB1);
+	simGetObjectPosition(hDummyMidCircle1,-1,pDummyMidCircle1);
+	simGetObjectPosition(hDummyOB2,-1,pDummyOB2);
+	simGetObjectPosition(hDummyBackOB2,-1,pDummyBackOB2);
+	simGetObjectPosition(hDummyMidCircle2,-1,pDummyMidCircle2);
+
 
 	//Compute interesting quantities for evasive trajectory
 	inflec1 = sqrtf(pow(pDummyEvasive1[0] - pCuboid1[0],2) + pow(pDummyEvasive1[1] - pCuboid1[1],2)) - half_cuboid1 - l;
@@ -151,6 +191,8 @@ void Initialize(){
 	r = sqrtf(pow(pDummy2[0] - pDummy3[0],2) + pow(pDummy2[1] - pDummy3[1],2)) * 1/2;
 	//std::cout << "Raggio:  "<< r <<"\n" <<std::endl;     Combacia valore che torna è 5.09796, valore ottenuto da path rettilineo è 4.925
 
+
+//////////////////////////////////////////////////////////////////
 	// First segment of the trail
 	//Init point
 	xIni1 = pDummy1[0];
@@ -194,12 +236,35 @@ void Initialize(){
 	xEv1 = pDummyEvasive1[0];
 	yEv1 = pDummyEvasive1[1];
 
+	xEv1_CAR = pDummyEvasive1_CAR[0];
+	yEv1_CAR = pDummyEvasive1_CAR[1];
+
+	pDummyEvasive1_CAR_Hom_frameOld[0] = xEv1_CAR;
+	pDummyEvasive1_CAR_Hom_frameOld[1] = yEv1_CAR;
+	pDummyEvasive1_CAR_Hom_frameOld[2] = 1;
+
+	xBack1 = pDummyBack1[0];
 	yBack1 = pDummyBack1[1];
 
 	xEv2 = pDummyEvasive2[0];
 	yEv2 = pDummyEvasive2[1];
 
 	yBack2 = pDummyBack2[1];
+
+	xOB1 = pDummyOB1[0];
+	yOB1 = pDummyOB1[1];
+	xBackOB1 = pDummyBackOB1[0];
+	yBackOB1 = pDummyBackOB1[1];
+	xMidCircle1 = pDummyMidCircle1[0];
+	yMidCircle1 = pDummyMidCircle1[1];
+	xOB2 = pDummyOB2[0];
+	yOB2 = pDummyOB2[1];
+	xBackOB2 = pDummyBackOB2[0];
+	yBackOB2 = pDummyBackOB2[1];
+	xMidCircle2 = pDummyMidCircle2[0];
+	yMidCircle2 = pDummyMidCircle2[1];
+
+///////////////////////////////////////////////////////////////
 
 
 	dt = (float)simGetSimulationTimeStep();
@@ -232,18 +297,18 @@ void Execution(){
 	// q = (x, y, theta, phi)  // u = (v, omega)
 
 	Eigen::Vector4f q_k, q_kp1; // current and next configuration
+	Eigen::Vector4f predicted_state;
 
-	float u, u1, u2, vd;
+	Eigen::Vector2f v_desired, pd, pr, V_d, W_d;
+	float V_a, W_a;
 
-	Eigen::Vector2f v, v_desired, pd, pr;
-
-	simFloat pRobot[3];
 	simFloat pAckerCar[3];
-	simFloat eRobot[3];
 	simFloat eAckerCar[3];
-	simFloat pClosestPointFront[3], pClosestPointRight[3];
+	simFloat pClosestPointFront[3];
 
-	float norm_v, omega, norm_v_desired;
+	Eigen::Matrix3f T_frameOld_To_framePredicted(3,3);
+	T_frameOld_To_framePredicted.setIdentity();
+	Eigen::Matrix2f Rot_matrix(2,2);
 
 
 	// get the current configuration
@@ -256,23 +321,14 @@ void Execution(){
 
 	float theta = eAckerCar[2];
 	float theta_car = theta + PI/2;
-	// std::cout << "theta "<<theta <<"\n" <<std::endl;
-	// std::cout << "theta car "<<theta_car <<"\n" <<std::endl;
-
-	//we control these two new variable via the variable b
-	// float b = 0.55;
-	float b = 0.65;
-	float y1 = pAckerCar[0] + l*cos(theta_car) + b*cos(theta_car+phi);
-	float y2 = pAckerCar[1] + l*sin(theta_car) + b*sin(theta_car+phi);
-
-	//std::cout << "p Car[0] "<<pAckerCar[0] <<"\n" <<std::endl;
-	//std::cout << "p Car[1] "<<pAckerCar[1] <<"\n" <<std::endl;
-	//std::cout << "Punto b       y1:     " << y1 <<"\n" <<std::endl;
-	//std::cout << "Punto b       y2:     " << y2 <<"\n" <<std::endl;
+	std::cout << "theta "<<theta <<"\n" <<std::endl;
+	std::cout << "theta car "<<theta_car <<"\n" <<std::endl;
 
 	//CONSTRUCT THE PREDEFINED TRAJECTORY
 	float t_sim = (float)simGetSimulationTime();
 	float x = 0, y = 0;
+
+	DWA_max = -100;
 
 	if(t_sim >= 0 && t_sim <= trajDur1){ 								 // TRAETTORIA PEZZO RETTILINEO        -      TRATTO  1
 
@@ -284,6 +340,17 @@ void Execution(){
 
 		v_desired(0) = (xEv1 - xIni1)/trajDur1;
 		v_desired(1) = (yEv1 - yIni1)/trajDur1;
+
+		if(traiettoriaSafe == true){
+			pDummy1WorldFrame[0] = xEv1;
+			pDummy1WorldFrame[1] = yEv1;
+			pDummy1WorldFrame[2] = 1;
+		}else{
+			pDummy1WorldFrame[0] = xFin2 + 0.2;
+			pDummy1WorldFrame[1] = yFin2;
+			pDummy1WorldFrame[2] = 1;
+		}
+
 
 		std::cout << "Sono nel rettilineo 1" <<"\n" <<std::endl;
 
@@ -300,8 +367,19 @@ void Execution(){
 		v_desired(0) = ((yBack1-yEv1)/trajDurEvasive)*(a*y_m1*exp(-a*y+a*inflec1))/pow((exp(-a*y+a*inflec1)+1),2);
 		v_desired(1) = (yBack1-yEv1)/trajDurEvasive;
 
-		x_end_ev = y1;
-		y_end_ev = y2;
+		x_end_ev = q_k(0);
+		y_end_ev = q_k(1);
+
+
+		if(traiettoriaSafe == true){
+			pDummy1WorldFrame[0] = xOB1;
+			pDummy1WorldFrame[1] = yOB1;
+			pDummy1WorldFrame[2] = 1;
+		}else{
+			pDummy1WorldFrame[0] = xFin2 + 0.2;
+			pDummy1WorldFrame[1] = yFin2;
+			pDummy1WorldFrame[2] = 1;
+		}
 
 		std::cout << "Sono nell'evasive 1" <<"\n" <<std::endl;
 
@@ -316,6 +394,28 @@ void Execution(){
 
 		v_desired(0) = (xFin2 - x_end_ev)/trajDur1Back;
 		v_desired(1) = (yFin2 - y_end_ev)/trajDur1Back;
+
+
+		if(traiettoriaSafe == true){
+			if(t_back < 0.5){
+				pDummy1WorldFrame[0] = xBackOB1;
+				pDummy1WorldFrame[1] = yBackOB1;
+				pDummy1WorldFrame[2] = 1;
+			}
+			else{
+				pDummy1WorldFrame[0] = xFin2;
+				pDummy1WorldFrame[1] = yFin2;
+				pDummy1WorldFrame[2] = 1;
+			}
+
+		}else{
+
+				pDummy1WorldFrame[0] = xFin2 + 0.2;
+				pDummy1WorldFrame[1] = yFin2;
+				pDummy1WorldFrame[2] = 1;
+			}
+
+
 
 		std::cout << "Sono nel rientro 1" <<"\n" <<std::endl;
 	}
@@ -333,6 +433,20 @@ void Execution(){
 		v_desired(0) =  PI*r*sin(theta)/trajDur2;
 		v_desired(1) = -PI*r*cos(theta)/trajDur2;
 
+
+		if(t2 < 0.5){
+			pDummy1WorldFrame[0] = xMidCircle1;
+			pDummy1WorldFrame[1] = yMidCircle1;
+			pDummy1WorldFrame[2] = 1;
+		}
+		else{
+			pDummy1WorldFrame[0] = xFin3;
+			pDummy1WorldFrame[1] = yFin3;
+			pDummy1WorldFrame[2] = 1;
+		}
+
+
+
 		std::cout << "Sono nella curva 1" <<"\n" <<std::endl;
 
 	}
@@ -345,6 +459,18 @@ void Execution(){
 
 		v_desired(0) = (xEv2 - xIni3)/trajDur3;
 		v_desired(1) = (yEv2 - yIni3)/trajDur3;
+
+
+
+		if(traiettoriaSafe == true){
+			pDummy1WorldFrame[0] = xEv2;
+			pDummy1WorldFrame[1] = yEv2;
+			pDummy1WorldFrame[2] = 1;
+		}else{
+			pDummy1WorldFrame[0] = xFin4 - 0.1;
+			pDummy1WorldFrame[1] = yFin4;
+			pDummy1WorldFrame[2] = 1;
+		}
 
 		std::cout << "Sono nel rettilineo 2" <<"\n" <<std::endl;
 	}
@@ -360,8 +486,19 @@ void Execution(){
 		v_desired(0) = ((yBack2-yEv2)/trajDurEvasive2)*(a2*y_m2*exp(-a2*y+a2*inflec2))/pow((exp(-a2*y+a2*inflec2)+1),2);
 		v_desired(1) = (yBack2-yEv2)/trajDurEvasive2;
 
-		x_end_ev = y1;
-		y_end_ev = y2;
+		x_end_ev = q_k(0);
+		y_end_ev = q_k(1);
+
+
+		if(traiettoriaSafe == true){
+			pDummy1WorldFrame[0] = xOB2;
+			pDummy1WorldFrame[1] = yOB2;
+			pDummy1WorldFrame[2] = 1;
+		}else{
+			pDummy1WorldFrame[0] = xFin4 - 0.1;
+			pDummy1WorldFrame[1] = yFin4;
+			pDummy1WorldFrame[2] = 1;
+		}
 
 		std::cout << "Sono nell'evasive 2" <<"\n" <<std::endl;
 
@@ -377,6 +514,25 @@ void Execution(){
 		v_desired(0) = (xFin4 - x_end_ev)/trajDur2Back;
 		v_desired(1) = (yFin4 - y_end_ev)/trajDur2Back;
 
+
+		if(traiettoriaSafe == true){
+			if(t_back < 0.5){
+				pDummy1WorldFrame[0] = xBackOB2;
+				pDummy1WorldFrame[1] = yBackOB2;
+				pDummy1WorldFrame[2] = 1;
+			}
+			else{
+				pDummy1WorldFrame[0] = xFin4;
+				pDummy1WorldFrame[1] = yFin4;
+				pDummy1WorldFrame[2] = 1;
+			}
+		}else{
+			pDummy1WorldFrame[0] = xFin4 - 0.1;
+			pDummy1WorldFrame[1] = yFin4;
+			pDummy1WorldFrame[2] = 1;
+		}
+
+
 		std::cout << "Sono nel rientro 2" <<"\n" <<std::endl;
 	}
 	else if (t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back && t_sim <= trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back + trajDur4){   // TRAETTORIA PEZZO CURVILINEO        -      TRATTO  4
@@ -390,6 +546,17 @@ void Execution(){
 		 v_desired(0) = -PI*r*sin(PI*t4)/ trajDur4;
 		 v_desired(1) = PI*r*cos(PI*t4)/ trajDur4;
 
+		 if(t4 < 0.5){
+ 			pDummy1WorldFrame[0] = xMidCircle2;
+ 			pDummy1WorldFrame[1] = yMidCircle2;
+ 			pDummy1WorldFrame[2] = 1;
+ 		}
+ 		else{
+ 			pDummy1WorldFrame[0] = xFin5;
+ 			pDummy1WorldFrame[1] = xFin5;
+ 			pDummy1WorldFrame[2] = 1;
+ 		}
+
 		 std::cout << "Sono nella curva 2" <<"\n" <<std::endl;
 	}
 	else if(t_sim > trajDur1 + trajDurEvasive + trajDur1Back + trajDur2 + trajDur3 + trajDurEvasive2 + trajDur2Back + trajDur4){
@@ -400,89 +567,164 @@ void Execution(){
 		v_desired(0) = 0;
 		v_desired(1) = 0;
 
+		v_commanded = 0;
+		omega_commanded = 0;
+		DWA_max = 1000;
+
 		std::cout << "IL PUNTO È ARRIVATO"<< "\n" <<std::endl;
 
 
 	}
 
-	//COMPUTE THE CONTROL INPUTS (via the controller)
+///////////////////////////////////////////////////////////////
 
-	pd(0) = x; // position desired
-	pd(1) = y;
-	pr(0) = y1; // robot position
-	pr(1) = y2;
+	pd(0) = x; // position desired x
+	pd(1) = y; // position desired y
+	pr(0) = q_k(0); // robot position x
+	pr(1) = q_k(1); // robot position y
 
-	// Error in position
-	// float pos_error = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
-	// std::cout << "pos_error "<<pos_error <<"\n" <<std::endl;
-	// std::cout << "pd_x "<<pd(0)<<"\n" <<std::endl;
-	// std::cout << "pr_x "<<pr(0)<<"\n" <<std::endl;
-	// std::cout << "pd_y "<<pd(1)<<"\n" <<std::endl;
-	// std::cout << "pr_y "<<pr(1)<<"\n" <<std::endl;
+	// DYNAMIC WINDOW APPROACH
+
+	//Reachable velocities
+	// V_d(0) = v_commanded - v_dot_max*nIntegration*dt;
+	// V_d(1) = v_commanded + v_dot_max*nIntegration*dt;
+	// W_d(0) = omega_commanded - w_dot_max*nIntegration*dt;
+	// W_d(1) = omega_commanded + w_dot_max*nIntegration*dt;
+
+	V_d(0) = v_commanded - v_dot_max*dt;
+	V_d(1) = v_commanded + v_dot_max*dt;
+	W_d(0) = omega_commanded - w_dot_max*dt;
+	W_d(1) = omega_commanded + w_dot_max*dt;
+
+	if(V_d(0) < v_min){
+		V_d(0) = v_min;
+	}
+	if(V_d(1) > v_max){
+		V_d(1) = v_max;
+	}
+	if(W_d(0) < w_min){
+		W_d(0) = w_min;
+	}
+	if(W_d(1) > w_max){
+		W_d(1) = w_max;
+	}
+
+	std::cout << "V_d min"<< V_d(0) <<"\n" <<std::endl;
+	std::cout << "V_d max"<< V_d(1) <<"\n" <<std::endl;
+	std::cout << "W_d min"<< W_d(0) <<"\n" <<std::endl;
+	std::cout << "W_d max"<< W_d(1) <<"\n" <<std::endl;
+	std::cout << "v_commanded"<< v_commanded <<"\n" <<std::endl;
+	std::cout << "omega_commanded"<< omega_commanded <<"\n" <<std::endl;
+
+	// DWA_max = -100;
+
+	//TAKE THE CLOSEST DETECTED POINT WITH THE KINECT
+	simGetObjectPosition(hClosestPointFront, -1, pClosestPointFront);
+
+	//Take pair of velocities
+	for(float i=V_d(0); i<=V_d(1); i+=0.1){
+		v_predicted = i;
+		for(float j=W_d(0); j<=W_d(1); j+=0.01){
+			omega_predicted = j;
+
+			//Predico gli stati->Runge Kutta
+			phi_predicted = q_k(3) + omega_predicted*nIntegration*dt;
+			theta_predicted = theta_car + (v_predicted*(sin((q_k(3)+phi_predicted)/2))/l) * nIntegration*dt;
+			x_predicted = q_k(0) + v_predicted*cos((theta_car+theta_predicted)/2)*cos((q_k(3)+phi_predicted)/2)*nIntegration*dt;
+			y_predicted = q_k(1) + v_predicted*sin((theta_car+theta_predicted)/2)*cos((q_k(3)+phi_predicted)/2)*nIntegration*dt;
+
+			//Construct the 2x2 rotation matrix
+			// Rot_matrix << cos(theta_predicted-theta_car), -sin(theta_predicted-theta_car),
+			//  							sin(theta_predicted-theta_car), cos(theta_predicted-theta_car);
+
+			Rot_matrix << cos(theta_predicted), -sin(theta_predicted),
+												sin(theta_predicted), cos(theta_predicted);
+			// Rot_matrix << cos(theta_car-theta_predicted), -sin(theta_car-theta_predicted),
+			// 							sin(theta_car-theta_predicted), cos(theta_car-theta_predicted);
+
+			T_frameOld_To_framePredicted.block<2,2>(0,0) = Rot_matrix;
+			// T_frameOld_To_framePredicted.col(2) << x_predicted-q_k(0), y_predicted-q_k(1), 1;
+			T_frameOld_To_framePredicted.col(2) << x_predicted, y_predicted, 1;
+
+			// pDummyEvasive1_CAR_Hom_framePredicted = T_frameOld_To_framePredicted*pDummyEvasive1_CAR_Hom_frameOld;
+			pDummyEvasive1_CAR_Hom_framePredicted = T_frameOld_To_framePredicted.inverse()*pDummy1WorldFrame;
+			xEv1_CAR_Predicted = pDummyEvasive1_CAR_Hom_framePredicted(0);
+			yEv1_CAR_Predicted = pDummyEvasive1_CAR_Hom_framePredicted(1);
+
+			//HEADING
+			// f_heading = 1 - abs(PI/2 - atan2f(yEv1_CAR_Predicted, xEv1_CAR_Predicted))/PI;
+			f_heading = 1 - abs(atan2f(yEv1_CAR_Predicted, xEv1_CAR_Predicted))/PI;
+			// std::cout << "f_heading"<< f_heading <<"\n" <<std::endl;
+			// std::cout << "my_atan"<< atan2f(yEv1_CAR_Predicted, xEv1_CAR_Predicted) <<"\n" <<std::endl;
+
+			//VELOCITY
+			distToGoal = sqrtf(pow(pDummy1WorldFrame[0]-x_predicted,2) + pow(pDummy1WorldFrame[1]-y_predicted,2));
+			f_distGoal = 1 - (distToGoal/20);
+
+			f_velocity = f_distGoal;
+
+			//DIST TO OBSTACLE
+			dist_closest_point_front = sqrtf(pow(pClosestPointFront[0]-x_predicted,2) + pow(pClosestPointFront[1]-y_predicted,2));
+			// std::cout << "distanza closest point front"<< "\n" << dist_closest_point_front<<"\n"  <<std::endl;
+			// std::cout << "x_predicted"<< "\n" << x_predicted<<"\n"  <<std::endl;
+			// std::cout << "y_predicted"<< "\n" << y_predicted<<"\n"  <<std::endl;
+			// std::cout << "pClosestPointFront[0]"<< "\n" << pClosestPointFront[0]<<"\n"  <<std::endl;
+			// std::cout << "pClosestPointFront[1]"<< "\n" << pClosestPointFront[1]<<"\n"  <<std::endl;
 
 
-	// Define random generator with Gaussian distribution
-	const double mean = 0.0;
-	const double stddev = 0.1;
-	// construct a trivial random generator engine from a time-based seed:
-	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-	std::default_random_engine generator (seed);
-	std::normal_distribution<double> distribution (mean,stddev);
+			if(dist_closest_point_front >= 100){
+				//Non osservo nulla
+				f_dist = 1;
+			}
+			else{
+				//osservo l'ostacolo
+				f_dist = 1 - dist_closest_point_front/10;
+			}
+			// std::cout << "f_dist"<< "\n" << f_dist<<"\n"  <<std::endl;
 
-	float beta = abs(distribution(generator));
+			//OBJECTIVE FUNCTION DWA
+			f_DWA = alpha*f_heading + beta*f_dist + my_gamma*f_velocity;
 
-	float vmax = 10;
-	float hdb_x = (abs(v_desired(0))/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
-	float hdb_y = (abs(v_desired(1))/vmax)* sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2)) + beta;
+			//Va and Wa
+			V_a = sqrtf(2*f_dist*v_dot_max);
+			W_a = sqrtf(2*f_dist*w_dot_max);
 
-	float radice = sqrtf(pow(pd(0) - pr(0),2) + pow(pd(1) - pr(1),2));
+			if(v_predicted <= V_a && omega_predicted <= W_a){
+				if(f_DWA>=DWA_max){
+					DWA_max = f_DWA;
+					v_commanded = v_predicted;
+					omega_commanded = omega_predicted;
+					// std::cout << "v_commanded nell'if"<< v_commanded <<"\n" <<std::endl;
+					// std::cout << "omega_commanded nell'if"<< omega_commanded <<"\n" <<std::endl;
 
-	// std::cout << "hdb_x "<<hdb_x <<"\n" <<std::endl;
-	// std::cout << "v_desired on y "<<v_desired(1) <<"\n" <<std::endl;
-	// std::cout << " radice "<< radice <<"\n" <<std::endl;
-	// std::cout << "hdb_y "<<hdb_y <<"\n" <<std::endl;
-
-  //HDB CONTROL LAWS
-	u1 = v_desired(0) + hdb_x * (pd(0) - pr(0));
-	u2 = v_desired(1) + hdb_y * (pd(1) - pr(1));
-
-	// std::cout << "u1 "<<u1 <<"\n" <<std::endl;
-	// std::cout << "u2 "<<u2 <<"\n" <<std::endl;
-
-	// u1 = v_desired(0) + 1.1 * (pd(0) - pr(0));
-	// u2 = v_desired(1) + 1.1 * (pd(1) - pr(1));
-
-	//REAR-WHELL DRIVE
-	// float theta_dot = (u1*cos(phi + theta_car)*sin(phi) + u2*sin(phi)*sin(phi + theta_car))*(1/l);
-	// float phi_dot = -(cos(theta_car+phi)*sin(phi)*(1/l)+sin(theta_car+phi)*(1/b))*u1-(sin(theta_car+phi)*sin(phi)*(1/l)-cos(theta_car+phi)*(1/b))*u2;
-
-	//FRONT-WHEEL DRIVE
-	float v_commanded = (u1*cos(theta_car+phi) + u2*sin(theta_car+phi));
-	float omega_commanded = ((u2*(2*l*cos(theta_car+phi) - b*cos(theta_car) + b*cos(theta_car+2*phi)))/(2*b*l)) - ((u1*(2*l*sin(theta_car+phi) - b*sin(theta_car) + b*sin(theta_car+2*phi)))/(2*b*l));
-
-	float theta_dot = (sin(phi)/l)*v_commanded;
-	float phi_dot = omega_commanded;
-
-	// std::cout << "theta_dot "<<theta_dot <<"\n" <<std::endl;
-	// std::cout << "phi_dot "<<phi_dot <<"\n" <<std::endl;
-
-	// Euler Integration
-	y1 = y1 + u1*dt; // u1 = y1dot
-	y2 = y2 + u2*dt; // u2 = y2dot
-
-	q_kp1(2) = theta + theta_dot *dt;
-	q_kp1(3) = phi + phi_dot *dt;
-
-	theta_car = theta_car + theta_dot *dt;
-	phi = phi + phi_dot *dt;
+				}
+			}
 
 
-	// y1 = pAckerCar[0] + l*cos(theta) + b*cos(theta+phi);
-	// y2 = pAckerCar[1] + l*sin(theta) + b*sin(theta+phi);
 
-	// Formula Inversa per trovare la posizione della macchina
-	q_kp1(0) = y1 - l*cos(theta_car) - b*cos(theta_car + phi);
-	q_kp1(1) = y2 - l*sin(theta_car) - b*sin(theta_car + phi);
+		}
+	}
+
+
+	//Euler integration
+	// q_kp1(0) = q_k(0) + v_commanded*cos(theta_car)*cos(q_k(3))*dt;
+  // q_kp1(1) = q_k(1) + v_commanded*sin(theta_car)*cos(q_k(3))*dt;
+  // q_kp1(2) = q_k(2) + (sin(q_k(3))/l)*v_commanded*dt;
+  // q_kp1(3) = q_k(3) + omega_commanded*dt;
+
+	// Runge-Kutta FRONT-WHEEL DRIVE
+	q_kp1(3) = q_k(3) + omega_commanded*dt;
+	theta_car = theta_car + (sin((q_k(3)+q_kp1(3))/2)/l)*v_commanded*dt;
+	q_kp1(0) = q_k(0) + v_commanded*cos((theta_car+q_k(2)+(PI)/2)/2)*cos((q_k(3)+q_kp1(3))/2)*dt;
+	q_kp1(1) = q_k(1) + v_commanded*sin((theta_car+q_k(2)+(PI)/2)/2)*cos((q_k(3)+q_kp1(3))/2)*dt;
+	q_kp1(2) = q_k(2) + ((sin((q_k(3)+q_kp1(3))/2))/l)*v_commanded*dt;
+
+	// Altro metodo
+	// q_kp1(3) = phi + omega_commanded*dt;
+  // theta_car = theta_car + (sin(q_kp1(3))/l)*v_commanded*dt;
+  // q_kp1(2) = q_k(2) + (sin(q_kp1(3))/l)*v_commanded*dt;
+  // q_kp1(0) = q_k(0) + v_commanded*cos(theta_car)*cos(q_kp1(3))*dt;
+  // q_kp1(1) = q_k(1) + v_commanded*sin(theta_car)*cos(q_kp1(3))*dt;
 
 
 	// set the robot in the new configuration
@@ -497,45 +739,41 @@ void Execution(){
 	simSetObjectOrientation(hAckerCar, -1, eAckerCar);
 
 
-	//Take the closest detected point
-	simGetObjectPosition(hClosestPointFront, -1, pClosestPointFront);
-	// std::cout << "posizione macchina x y z"<< "\n" << pAckerCar[0] <<"\n" <<pAckerCar[1]<<"\n"<< pAckerCar[2]<<"\n" <<std::endl;
-	// std::cout << "posizione closest point"<< "\n" << pClosestPointFront[0] <<"\n" <<pClosestPointFront[1]<<"\n"<< pClosestPointFront[2]<<"\n" <<std::endl;
-	simGetObjectPosition(hClosestPointRight, -1, pClosestPointRight);
-
-	dist_closest_point_front = sqrtf(pow(pClosestPointFront[0]-pAckerCar[0],2) + pow(pClosestPointFront[1]-pAckerCar[1],2));
-	std::cout << "distanza closest point front"<< "\n" << dist_closest_point_front<<"\n"  <<std::endl;
-	dist_closest_point_right = sqrtf(pow(pClosestPointRight[0]-pAckerCar[0],2) + pow(pClosestPointRight[1]-pAckerCar[1],2));
-	std::cout << "distanza closest point right"<< "\n" << dist_closest_point_right<<"\n"  <<std::endl;
-
-	if(dist_closest_point_front == 0.02 && dist_closest_point_right == 0.02){
-
-		min_dist = 100;
-		direction = -1;
-
-		std::cout << "NON STO OSSERVANDO NIENTE"<< "\n" <<std::endl;
-
-
-	}
-	else if(dist_closest_point_front > 0.02){
-		//solo se facciamo detection di un cuboid
-		//0.2 è la distanza dalla closest point alla car quando viene rimesso alla posizione di default
-		min_dist = dist_closest_point_front;
-		direction = 0;
-		std::cout << "min_dist"<< "\n" << min_dist<<"\n"  <<std::endl;
-		std::cout << "STO OSSERVANDO CON KINECT FRONT"<< "\n" <<std::endl;
-
-	}
-	else if (dist_closest_point_right > 0.02){
-
-		min_dist = dist_closest_point_right;
-		direction = 1;
-		std::cout << "min_dist"<< "\n" << min_dist<<"\n"  <<std::endl;
-		std::cout << "STO OSSERVANDO CON KINECT RIGHT"<< "\n" <<std::endl;
-	}
-
-
 }
+
+// float my_atan(float y, float x){
+//
+// 	float value_atan;
+//
+// 	if(x>0){
+// 		value_atan = atan(y/x);
+// 		std::cout << "SONO NEL PRIMO IF"<< "\n" <<std::endl;
+// 	}
+// 	if(y>=0 && x<0){
+// 		value_atan = PI + atan(y/x);
+// 		std::cout << "SONO NEL SECONDO IF"<< "\n" <<std::endl;
+// 	}
+// 	if(y<0 && x<0){
+// 		value_atan = -PI + atan(y/x);
+// 		std::cout << "SONO NEL TERZO IF"<< "\n" <<std::endl;
+// 	}
+// 	if(y>0 && x==0){
+// 		value_atan = PI/2;
+// 		std::cout << "SONO NEL QUARTO IF"<< "\n" <<std::endl;
+// 	}
+// 	if(y<0 && x==0){
+// 		value_atan = -PI/2;
+// 		std::cout << "SONO NEL QUINTO IF"<< "\n" <<std::endl;
+// 	}
+// 	if(value_atan<0){
+// 		value_atan = value_atan + 2*PI;
+// 		std::cout << "SONO NEL SESTO IF"<< "\n" <<std::endl;
+// 	}
+//
+// 	return value_atan;
+// }
+
+
 
 
 
